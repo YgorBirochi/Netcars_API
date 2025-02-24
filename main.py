@@ -16,7 +16,7 @@ try:
 except Exception as e:
     print(f'Error: {e}')
 
-from view import *
+from user_view import *
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
