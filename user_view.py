@@ -42,8 +42,7 @@ def create_user():
     nome = data.get('nome_completo')
     email = data.get('email')
     senha = data.get('senha_hash')
-
-
+    tipo_usuario = data.get('tipo_usuario')
 
 #ativo = 1 sim e = 0 nao
 
@@ -59,7 +58,7 @@ def create_user():
 
     senha_hash = generate_password_hash(senha).decode('utf-8')
 
-    cursor.execute("INSERT INTO USUARIO (nome_completo, email, senha_hash, ativo) VALUES (?, ?, ?, 1)", (nome, email, senha_hash))
+    cursor.execute("INSERT INTO USUARIO (nome_completo, email, senha_hash, ativo, tipo_usuario) VALUES (?, ?, ?, 1, ?)", (nome, email, senha_hash, tipo_usuario))
 
     con.commit()
     cursor.close()
