@@ -96,8 +96,11 @@ def update_user(id):
         if cursor.fetchone():
             return jsonify({'message': 'Email já cadastrado'}), 400
 
+    if senha != user_data[6]:
+        senha_hash = generate_password_hash(senha).decode('utf-8')
+
     cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ? WHERE id_usuario = ?",
-                   (nome, data_nascimento, cpf_cnpj, telefone, email, senha, id))
+                   (nome, data_nascimento, cpf_cnpj, telefone, email, senha_hash, id))
 
     con.commit()
     cursor.close()
