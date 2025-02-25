@@ -44,8 +44,6 @@ def create_user():
     senha = data.get('senha_hash')
     tipo_usuario = data.get('tipo_usuario')
 
-#ativo = 1 sim e = 0 nao
-
     cursor = con.cursor()
     cursor.execute("SELECT 1 FROM USUARIO WHERE email = ?", (email,))
 
