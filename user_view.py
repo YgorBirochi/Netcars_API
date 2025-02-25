@@ -57,15 +57,19 @@ def create_user():
     senha_hash = generate_password_hash(senha).decode('utf-8')
 
     cursor.execute("INSERT INTO USUARIO (nome_completo, email, senha_hash, ativo, tipo_usuario) VALUES (?, ?, ?, 1, ?)", (nome, email, senha_hash, tipo_usuario))
-
     con.commit()
+
+    cursor.execute('SELECT ID_USUARIO FROM USUARIO WHERE EMAIL = ?', (email,))
+    id = cursor.fetchone()[0]
     cursor.close()
 
     return jsonify({
-        'message': "Email cadastrado com sucesso!",
-        'user': {
-            'nome': nome,
-            'email': email
+        'success': "Email cadastrado com sucesso!",
+        'dados': {
+            'nome_completo': nome,
+            'email': email,
+            'id_usuario': id,
+            'tipo_usuario': tipo_usuario
         }
     })
 
@@ -179,14 +183,15 @@ def login_user():
         tentativas = 0
         cursor.close()
         return jsonify({
-            "message": "Login realizado com sucesso!",
-            "dados_user": {
+            "success": "Login realizado com sucesso!",
+            "dados": {
                 'id_usuario': id_usuario,
                 "email": email,
                 "nome_completo": nome_completo,
                 "data_nascimento": data_nascimento,
                 "cpf_cnpj": cpf_cnpj,
                 "telefone": telefone,
+                "tipo_usuario": tipo_usuario
             }
         })
 
