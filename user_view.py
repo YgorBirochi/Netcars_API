@@ -5,13 +5,13 @@ from flask_bcrypt import generate_password_hash, check_password_hash
 
 def validar_senha(senha):
     if len(senha) < 8:
-        return jsonify({"error": "A senha deve ter pelo menos 8 caracteres."}), 400
+        return "A senha deve ter pelo menos 8 caracteres."
 
     if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", senha):
-        return jsonify({"error": "A senha deve conter pelo menos um símbolo especial (!@#$%^&*...)."}), 400
+        return "A senha deve conter pelo menos um símbolo especial (!@#$%^&*...)."
 
     if not re.search(r"[A-Z]", senha):
-        return jsonify({"error": "A senha deve conter pelo menos uma letra maiúscula."}), 400
+        return "A senha deve conter pelo menos uma letra maiúscula."
 
     return True
 
@@ -52,7 +52,7 @@ def create_user():
 
     senha_check = validar_senha(senha)
     if senha_check is not True:
-        return senha_check
+        return jsonify({'error': senha_check}), 400
 
     senha_hash = generate_password_hash(senha).decode('utf-8')
 
@@ -71,6 +71,15 @@ def create_user():
 
 @app.route('/user/<int:id>', methods=['PUT'])
 def update_user(id):
+    data = request.get_json()
+    nome_completo = data.get('nome_completo')
+    data_nascimento = data.get('data_nascimento')
+    cpf_cnpj = data.get('cpf_cnpj')
+    telefone = data.get('telefone')
+    email = data.get('email')
+    senha_hash = data.get('senha_hash')
+    senha_nova = data.get('senha_nova')
+
     cursor = con.cursor()
 
     cursor.execute("SELECT ID_USUARIO, NOME_COMPLETO, DATA_NASCIMENTO, CPF_CNPJ, TELEFONE, EMAIL, SENHA_HASH FROM USUARIO WHERE id_usuario = ?", (id,))
@@ -78,39 +87,55 @@ def update_user(id):
 
     if not user_data:
         cursor.close()
-        return jsonify({'message': 'Usuário não encontrado'}), 404
-
-    data = request.get_json()
-    nome = data.get('nome_completo', user_data[1])
-    data_nascimento = data.get('data_nascimento', user_data[2])
-    cpf_cnpj = data.get('cpf_cnpj', user_data[3])
-    telefone = data.get('telefone', user_data[4])
-    email = data.get('email', user_data[5])
-    senha = data.get('senha_hash', user_data[6])
+        return jsonify({'error': 'Usuário não encontrado'}), 404
 
     cursor.execute("SELECT 1 FROM USUARIO WHERE email = ?", (email,))
 
     if email != user_data[5]:
         if cursor.fetchone():
-            return jsonify({'message': 'Email já cadastrado'}), 400
+            return jsonify({'error': 'Email já cadastrado'}), 404
 
-    if senha != user_data[6]:
-        senha_hash = generate_password_hash(senha).decode('utf-8')
+    if not senha_nova and not senha_hash:
+        cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ? WHERE id_usuario = ?",
+            (nome_completo, data_nascimento, cpf_cnpj, telefone, email, id))
+        con.commit()
+        cursor.close()
+        return jsonify({
+            'success': "Informações atualizadas com sucesso!",
+            'user': {
+                'nome_completo': nome_completo,
+                'data_nascimento': data_nascimento,
+                'cpf_cnpj': cpf_cnpj,
+                'telefone': telefone,
+                'email': email
+            }
+        })
+
+    if not senha_nova and senha_hash:
+        return jsonify({"error": "Digite uma nova senha para atualizá-la."}), 401
+
+    if check_password_hash(user_data[6], senha_hash):
+        senha_check = validar_senha(senha_nova)
+        if senha_check is not True:
+            return jsonify({'error': senha_check}), 404
+        senha_enviada = generate_password_hash(senha_nova).decode('utf-8')
+    else:
+        return jsonify({"error": "Senha atual incorreta."}), 401
 
     cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ? WHERE id_usuario = ?",
-                   (nome, data_nascimento, cpf_cnpj, telefone, email, senha_hash, id))
+                   (nome_completo, data_nascimento, cpf_cnpj, telefone, email, senha_enviada, id))
 
     con.commit()
     cursor.close()
 
     return jsonify({
-        'message': "Informações atualizadas com sucesso!",
+        'success': "Informações atualizadas com sucesso!",
         'user': {
-            'nome_completo': nome,
+            'nome_completo': nome_completo,
             'data_nascimento': data_nascimento,
             'cpf_cnpj': cpf_cnpj,
             'telefone': telefone,
-            'email': email,
+            'email': email
         }
     })
 
@@ -134,7 +159,7 @@ def login_user():
 
     if not user_data:
         cursor.close()
-        return jsonify({'message': 'Usuário não encontrado.'}), 401
+        return jsonify({'error': 'Usuário não encontrado.'}), 401
 
     id_usuario = user_data[0]
     email = user_data[1]
@@ -148,7 +173,7 @@ def login_user():
 
     if not ativo:
         cursor.close()
-        return jsonify({'message': 'Usuário inativo'}), 401
+        return jsonify({'error': 'Usuário inativo'}), 401
 
     if check_password_hash(senha_hash, senha):
         tentativas = 0
@@ -162,7 +187,6 @@ def login_user():
                 "data_nascimento": data_nascimento,
                 "cpf_cnpj": cpf_cnpj,
                 "telefone": telefone,
-                "ativo": ativo
             }
         })
 
@@ -175,6 +199,4 @@ def login_user():
         cursor.close()
         return jsonify({"error": "Número máximo de tentativas de login excedido."}), 401
 
-    con.commit()
-    cursor.close()
-    return jsonify({"error": "Credenciais incorretas."}), 401
+    return jsonify({"error": "Senha incorreta."}), 401
