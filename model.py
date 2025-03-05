@@ -9,10 +9,8 @@ class Usuario:
         self.telefone = telefone
         self.email = email
         self.senha_hash = senha_hash
-        self.endereco = endereco
         self.data_cadastro = data_cadastro
         self.atualizado_em = atualizado_em
-        self.adm = adm
         self.tipo_usuario = tipo_usuario
 
 
@@ -36,6 +34,7 @@ class Carro:
         self.licenciado = licenciado
         self.criado_em = criado_em
         self.atualizado_em = atualizado_em
+        self.placa = placa
 
 
 class Moto:
@@ -61,6 +60,7 @@ class Moto:
         self.licenciado = licenciado
         self.criado_em = criado_em
         self.atualizado_em = atualizado_em
+        self.placa = placa
 
 
 class DocumentacaoVeiculos:
