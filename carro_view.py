@@ -9,7 +9,7 @@ def get_carro():
 
     cursor.execute('''
     SELECT id_carro, marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria, 
-    quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em FROM CARROS
+    quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo FROM CARROS
     ''')
 
     fetch = cursor.fetchall()
@@ -35,7 +35,8 @@ def get_carro():
             'preco_venda': carro[14],
             'licenciado': carro[15],
             'placa': carro[16],
-            'criado_em': carro[17]
+            'criado_em': carro[17],
+            'ativo': carro[18]
         })
 
     qnt_carros = len(lista_carros)
@@ -43,7 +44,7 @@ def get_carro():
     return jsonify({
         'success': f'{qnt_carros} carro(s) encontrado(s).',
         'veiculos': lista_carros
-    })
+    }), 200
 
 
 
@@ -83,6 +84,7 @@ def add_carro():
     preco_venda = data.get('preco_venda')
     licenciado = data.get('licenciado')
     placa = data.get('placa')
+    ativo = 1
 
     # Alterando fuso horário para o de Brasília
     criado_em = datetime.now(pytz.timezone('America/Sao_Paulo'))
@@ -92,11 +94,11 @@ def add_carro():
     cursor.execute('''
     INSERT INTO CARROS
     (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria, 
-    quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em)
+    quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo)
     VALUES
-    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria,
-    quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em))
+    quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo))
 
     con.commit()
     cursor.close()
@@ -120,9 +122,118 @@ def add_carro():
             'preco_venda': preco_venda,
             'licenciado': licenciado,
             'placa': placa,
-            'criado_em': criado_em
+            'criado_em': criado_em,
+            'ativo': ativo
         }
+    }), 200
+
+@app.route('/carro/<int:id>', methods=['DELETE'])
+def deletar_carro(id):
+    cursor = con.cursor()
+
+    cursor.execute('SELECT 1 FROM CARROS WHERE ID_CARRO = ?', (id,))
+
+    if not cursor.fetchone():
+        return jsonify({
+            'error': 'Veículo não encontrado.'
+        })
+
+    cursor.execute('DELETE FROM CARROS WHERE ID_CARRO = ?', (id,))
+
+    con.commit()
+    cursor.close()
+
+    return jsonify({
+        'success': "Veículo deletado com sucesso!"
     })
+
+@app.route('/carro/<int:id>', methods=['PUT'])
+def editar_carro(id):
+    cursor = con.cursor()
+
+    # Verificando a existência do carro
+    cursor.execute('SELECT 1 FROM CARROS WHERE ID_CARRO = ?', (id,))
+    if not cursor.fetchone():
+        return jsonify({'error': 'Veículo não encontrado.'}), 404
+
+    data = request.get_json()
+    fields = [
+        'marca', 'modelo', 'ano_modelo', 'ano_fabricacao', 'versao',
+        'cor', 'cambio', 'combustivel', 'categoria', 'quilometragem',
+        'estado', 'cidade', 'preco_compra', 'preco_venda', 'licenciado',
+        'placa', 'ativo'
+    ]
+
+    cursor.execute('''
+        SELECT marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria, 
+        quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, ativo
+        FROM CARROS WHERE ID_CARRO = ?
+    ''', (id,))
+
+    data_ant = []
+    for item in cursor.fetchone():
+        data_ant.append(item)
+
+    print(data_ant)
+
+    for i in range(len(data_ant)):
+        print(fields[i])
+        if data.get(fields[i]) == data_ant[i] or not data.get(fields[i]):
+            data[fields[i]] = data_ant[i]
+
+    marca = data.get('marca')
+    modelo = data.get('modelo')
+    ano_modelo = data.get('ano_modelo')
+    ano_fabricacao = data.get('ano_fabricacao')
+    versao = data.get('versao')
+    cor = data.get('cor')
+    cambio = data.get('cambio')
+    combustivel = data.get('combustivel')
+    categoria = data.get('categoria')
+    quilometragem = data.get('quilometragem')
+    estado = data.get('estado')
+    cidade = data.get('cidade')
+    preco_compra = data.get('preco_compra')
+    preco_venda = data.get('preco_venda')
+    licenciado = data.get('licenciado')
+    placa = data.get('placa')
+    ativo = data.get('ativo')
+
+    cursor.execute('''
+        UPDATE CARROS
+        SET marca =?, modelo =?, ano_modelo =?, ano_fabricacao =?, versao =?, cor =?, cambio =?, combustivel =?, categoria =?, 
+        quilometragem =?, estado =?, cidade =?, preco_compra =?, preco_venda =?, licenciado =?, placa =?, ativo =?
+        where ID_CARRO = ?
+        ''', (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria,
+              quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, ativo, id))
+
+    con.commit()
+    cursor.close()
+
+    return jsonify({
+        'success': "Veículo editado com sucesso!",
+        'dados': {
+            'marca': marca,
+            'modelo': modelo,
+            'ano_modelo': ano_modelo,
+            'ano_fabricacao': ano_fabricacao,
+            'versao': versao,
+            'cor': cor,
+            'cambio': cambio,
+            'combustivel': combustivel,
+            'categoria': categoria,
+            'quilometragem': quilometragem,
+            'estado': estado,
+            'cidade': cidade,
+            'preco_compra': preco_compra,
+            'preco_venda': preco_venda,
+            'licenciado': licenciado,
+            'placa': placa,
+            'ativo': ativo
+        }
+    }), 200
+
+
 
 
 
