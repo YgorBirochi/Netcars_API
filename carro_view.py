@@ -135,9 +135,7 @@ def deletar_carro(id):
     cursor.execute('SELECT 1 FROM CARROS WHERE ID_CARRO = ?', (id,))
 
     if not cursor.fetchone():
-        return jsonify({
-            'error': 'Veículo não encontrado.'
-        })
+        return jsonify({'error': 'Veículo não encontrado.'}), 404
 
     cursor.execute('DELETE FROM CARROS WHERE ID_CARRO = ?', (id,))
 
@@ -146,7 +144,7 @@ def deletar_carro(id):
 
     return jsonify({
         'success': "Veículo deletado com sucesso!"
-    })
+    }), 200
 
 @app.route('/carro/<int:id>', methods=['PUT'])
 def editar_carro(id):
@@ -174,8 +172,6 @@ def editar_carro(id):
     data_ant = []
     for item in cursor.fetchone():
         data_ant.append(item)
-
-    print(data_ant)
 
     for i in range(len(data_ant)):
         print(fields[i])
@@ -255,6 +251,6 @@ def upload():
         f.save(file_path)
 
     # Retorna a rota ou o id da pasta
-    return jsonify({'folder': new_folder, 'folder_id': folder_id})
+    return jsonify({'folder': new_folder, 'folder_id': folder_id}), 200
 
 
