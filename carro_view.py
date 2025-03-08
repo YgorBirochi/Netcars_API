@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from main import app, con
 from datetime import datetime
 import pytz
+import os, uuid
 
 @app.route('/carro', methods=['GET'])
 def get_carro():
@@ -233,7 +234,27 @@ def editar_carro(id):
         }
     }), 200
 
+# Rota para salvar as imagens em uma pasta com ID único
+@app.route('/upload', methods=['POST'])
+def upload():
+    base_dir = 'assets/img'  # Certifique-se de que essa pasta exista ou crie-a
 
+    # Gerar um ID único para a nova pasta (por exemplo, usando uuid)
+    folder_id = str(uuid.uuid4())
+    new_folder = os.path.join(base_dir, folder_id)
+    os.makedirs(new_folder, exist_ok=True)
 
+    # Obter os arquivos enviados
+    files = request.files.getlist('files')
+    if len(files) < 3:
+        return jsonify({'error': 'Selecione pelo menos 3 arquivos.'}), 400
+
+    for f in files:
+        # Salva cada arquivo na nova pasta
+        file_path = os.path.join(new_folder, f.filename)
+        f.save(file_path)
+
+    # Retorna a rota ou o id da pasta
+    return jsonify({'folder': new_folder, 'folder_id': folder_id})
 
 
