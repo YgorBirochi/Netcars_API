@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request
-from main import app, con
+from main import app, con, upload_folder
 from datetime import datetime
 import pytz
 import os, uuid
@@ -72,6 +72,14 @@ def add_moto():
             'missing_fields': missing_fields
         }), 400
 
+    # Imagens do veículo
+    imagens = request.files.getlist('imagens')
+
+    if not imagens:
+        return jsonify({
+            'error': 'Dados incompletos.',
+            'missing_fields': "imagem"
+        }), 400
 
     marca = data.get('marca')
     modelo = data.get('modelo')
@@ -105,12 +113,26 @@ def add_moto():
     cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
     preco_compra, preco_venda, placa, criado_em, ativo, alimentacao)
     VALUES
-    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ID_MOTO
     ''', (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, marchas, partida, tipo_motor,
     cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem,
     preco_compra, preco_venda, placa, criado_em, ativo, alimentacao))
 
+    id_moto = cursor.fetchone()[0]
     con.commit()
+
+    # Define a pasta destino usando o id da moto
+    pasta_destino = os.path.join(upload_folder, "Motos", str(id_moto))
+    os.makedirs(pasta_destino, exist_ok=True)
+
+    # Salva cada imagem na pasta, nomeando sequencialmente (1.jpeg, 2.jpeg, 3.jpeg, ...)
+    saved_images = []  # para armazenar os nomes dos arquivos salvos
+    for index, imagem in enumerate(imagens, start=1):
+        nome_imagem = f"{index}.jpeg"
+        imagem_path = os.path.join(pasta_destino, nome_imagem)
+        imagem.save(imagem_path)
+        saved_images.append(nome_imagem)
+
     cursor.close()
 
     return jsonify({
@@ -136,7 +158,8 @@ def add_moto():
             'placa': placa,
             'alimentacao': alimentacao,
             'criado_em': criado_em,
-            'ativo': ativo
+            'ativo': ativo,
+            'imagens_salvas': saved_images
         }
     }), 200
 
@@ -255,5 +278,3 @@ def editar_moto(id):
             'ativo': ativo
         }
     }), 200
-
-

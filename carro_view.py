@@ -68,6 +68,15 @@ def add_carro():
             'missing_fields': missing_fields
         }), 400
 
+    # Imagens do veículo
+    imagens = request.files.getlist('imagens')
+
+    if not imagens:
+        return jsonify({
+            'error': 'Dados incompletos.',
+            'missing_fields': "imagem"
+        }), 400
+
 
     marca = data.get('marca')
     modelo = data.get('modelo')
@@ -97,11 +106,26 @@ def add_carro():
     (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria, 
     quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo)
     VALUES
-    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)  RETURNING ID_CARRO
     ''', (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria,
     quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo))
 
+
+    id_carro = cursor.fetchone()[0]
     con.commit()
+
+    # Define a pasta destino usando o id da moto
+    pasta_destino = os.path.join(upload_folder, "Carros", str(id_carro))
+    os.makedirs(pasta_destino, exist_ok=True)
+
+    # Salva cada imagem na pasta, nomeando sequencialmente (1.jpeg, 2.jpeg, 3.jpeg, ...)
+    saved_images = []  # para armazenar os nomes dos arquivos salvos
+    for index, imagem in enumerate(imagens, start=1):
+        nome_imagem = f"{index}.jpeg"
+        imagem_path = os.path.join(pasta_destino, nome_imagem)
+        imagem.save(imagem_path)
+        saved_images.append(nome_imagem)
+
     cursor.close()
 
     return jsonify({
@@ -124,7 +148,8 @@ def add_carro():
             'licenciado': licenciado,
             'placa': placa,
             'criado_em': criado_em,
-            'ativo': ativo
+            'ativo': ativo,
+            'imagens_salvas': saved_images
         }
     }), 200
 
@@ -230,27 +255,5 @@ def editar_carro(id):
         }
     }), 200
 
-# Rota para salvar as imagens em uma pasta com ID único
-@app.route('/upload', methods=['POST'])
-def upload():
-    base_dir = 'assets/img'  # Certifique-se de que essa pasta exista ou crie-a
-
-    # Gerar um ID único para a nova pasta (por exemplo, usando uuid)
-    folder_id = str(uuid.uuid4())
-    new_folder = os.path.join(base_dir, folder_id)
-    os.makedirs(new_folder, exist_ok=True)
-
-    # Obter os arquivos enviados
-    files = request.files.getlist('files')
-    if len(files) < 3:
-        return jsonify({'error': 'Selecione pelo menos 3 arquivos.'}), 400
-
-    for f in files:
-        # Salva cada arquivo na nova pasta
-        file_path = os.path.join(new_folder, f.filename)
-        f.save(file_path)
-
-    # Retorna a rota ou o id da pasta
-    return jsonify({'folder': new_folder, 'folder_id': folder_id}), 200
 
 

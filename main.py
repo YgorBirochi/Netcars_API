@@ -12,6 +12,8 @@ database = app.config['DB_NAME']
 user = app.config['DB_USER']
 password = app.config['DB_PASSWORD']
 
+upload_folder = app.config['UPLOAD_FOLDER']
+
 try:
     con = fdb.connect(host=host, database=database, user=user, password=password)
     print('Conexão estabelecida com sucesso')
@@ -21,6 +23,7 @@ except Exception as e:
 from login_cadastro_view import *
 from carro_view import *
 from moto_view import *
+from relatorios_view import *
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
