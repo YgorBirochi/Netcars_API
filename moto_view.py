@@ -9,7 +9,7 @@ def get_moto():
     cursor = con.cursor()
 
     cursor.execute('''
-    SELECT marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, marchas, partida, tipo_motor, 
+    SELECT marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, tipo_motor, 
         cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
         preco_compra, preco_venda, placa, alimentacao, criado_em, ativo FROM MOTOS
     ''')
@@ -27,21 +27,22 @@ def get_moto():
             'ano_fabricacao': moto[4],
             'categoria': moto[5],
             'cor': moto[6],
-            'marchas': moto[7],
-            'partida': moto[8],
-            'tipo_motor': moto[9],
-            'cilindrada': moto[10],
-            'freio_dianteiro_traseiro': moto[11],
-            'refrigeracao': moto[12],
-            'estado': moto[13],
-            'cidade': moto[14],
-            'quilometragem': moto[15],
-            'preco_compra': moto[16],
-            'preco_venda': moto[17],
-            'placa': moto[18],
-            'alimentacao': moto[19],
-            'criado_em': moto[20],
-            'ativo': moto[21]
+            'renavam': moto[7],
+            'marchas': moto[8],
+            'partida': moto[9],
+            'tipo_motor': moto[10],
+            'cilindrada': moto[11],
+            'freio_dianteiro_traseiro': moto[12],
+            'refrigeracao': moto[13],
+            'estado': moto[14],
+            'cidade': moto[15],
+            'quilometragem': moto[16],
+            'preco_compra': moto[17],
+            'preco_venda': moto[18],
+            'placa': moto[19],
+            'alimentacao': moto[20],
+            'criado_em': moto[21],
+            'ativo': moto[22]
         })
 
     qnt_motos = len(lista_motos)
@@ -59,7 +60,7 @@ def add_moto():
     # Lista de campos obrigatórios
     required_fields = [
         'marca', 'modelo', 'ano_modelo', 'ano_fabricacao', 'categoria',
-        'cor', 'marchas', 'partida', 'tipo_motor', 'cilindrada',
+        'cor', 'renavam', 'marchas', 'partida', 'tipo_motor', 'cilindrada',
         'freio_dianteiro_traseiro', 'refrigeracao', 'estado', 'cidade',
         'quilometragem', 'preco_compra', 'preco_venda', 'placa', 'alimentacao'
     ]
@@ -87,6 +88,7 @@ def add_moto():
     ano_fabricacao = data.get('ano_fabricacao')
     categoria = data.get('categoria')
     cor = data.get('cor')
+    renavam = data.get('renavam')
     marchas = data.get('marchas')
     partida = data.get('partida')
     tipo_motor = data.get('tipo_motor')
@@ -109,13 +111,13 @@ def add_moto():
 
     cursor.execute('''
     INSERT INTO MOTOS
-    (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, marchas, partida, tipo_motor, 
-    cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
-    preco_compra, preco_venda, placa, criado_em, ativo, alimentacao)
+    (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, 
+    tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, 
+    quilometragem, preco_compra, preco_venda, placa, criado_em, ativo, alimentacao)
     VALUES
     (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ID_MOTO
-    ''', (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, marchas, partida, tipo_motor,
-    cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem,
+    ''', (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida,
+    tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem,
     preco_compra, preco_venda, placa, criado_em, ativo, alimentacao))
 
     id_moto = cursor.fetchone()[0]
@@ -144,6 +146,7 @@ def add_moto():
             'ano_fabricacao': ano_fabricacao,
             'categoria': categoria,
             'cor': cor,
+            'renavam': renavam,
             'marchas': marchas,
             'partida': partida,
             'tipo_motor': tipo_motor,
@@ -194,15 +197,15 @@ def editar_moto(id):
 
     fields = [
         'marca', 'modelo', 'ano_modelo', 'ano_fabricacao', 'categoria',
-        'cor', 'marchas', 'partida', 'tipo_motor', 'cilindrada',
+        'cor', 'renavam', 'marchas', 'partida', 'tipo_motor', 'cilindrada',
         'freio_dianteiro_traseiro', 'refrigeracao', 'estado', 'cidade',
         'quilometragem', 'preco_compra', 'preco_venda', 'placa', 'alimentacao',
         'ativo'
     ]
 
     cursor.execute('''
-        SELECT marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, marchas, partida, tipo_motor, 
-        cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
+        SELECT marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, 
+        tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
         preco_compra, preco_venda, placa, criado_em, ativo, alimentacao
         FROM MOTOS WHERE ID_MOTO = ?
     ''', (id,))
@@ -222,6 +225,7 @@ def editar_moto(id):
     ano_fabricacao = data.get('ano_fabricacao')
     categoria = data.get('categoria')
     cor = data.get('cor')
+    renavam = data.get('renavam')
     marchas = data.get('marchas')
     partida = data.get('partida')
     tipo_motor = data.get('tipo_motor')
@@ -240,14 +244,14 @@ def editar_moto(id):
 
     cursor.execute('''
         UPDATE MOTOS
-        SET marca =?, modelo =?, ano_modelo =?, ano_fabricacao =?, categoria =?, cor =?, marchas =?, partida =?, tipo_motor =?, 
-        cilindrada=?, freio_dianteiro_traseiro =?, refrigeracao, =?, estado =?, cidade =?,  quilometragem =?, preco_compra =?, 
-        preco_venda =?, placa =?, criado_em = ?, ativo =?, alimentacao = ?
+        SET marca =?, modelo =?, ano_modelo =?, ano_fabricacao =?, categoria =?, cor =?, renavam = ?, marchas =?, partida =?, 
+        tipo_motor =?, cilindrada=?, freio_dianteiro_traseiro =?, refrigeracao, =?, estado =?, cidade =?,  quilometragem =?, 
+        preco_compra =?, preco_venda =?, placa =?, criado_em = ?, ativo =?, alimentacao = ?
         where ID_MOTO = ?
         ''',
-       (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, marchas, partida, tipo_motor,
-        cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem,
-        preco_compra, preco_venda, placa, criado_em, ativo, alimentacao))
+       (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida,
+        tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade,
+        quilometragem, preco_compra, preco_venda, placa, criado_em, ativo, alimentacao))
 
     con.commit()
     cursor.close()
@@ -261,6 +265,7 @@ def editar_moto(id):
             'ano_fabricacao': ano_fabricacao,
             'categoria': categoria,
             'cor': cor,
+            'renavam': renavam,
             'marchas': marchas,
             'partida': partida,
             'tipo_motor': tipo_motor,

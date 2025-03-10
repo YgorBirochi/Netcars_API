@@ -9,7 +9,7 @@ def get_carro():
     cursor = con.cursor()
 
     cursor.execute('''
-    SELECT id_carro, marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria, 
+    SELECT id_carro, marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria, 
     quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo FROM CARROS
     ''')
 
@@ -26,18 +26,19 @@ def get_carro():
             'ano_fabricacao': carro[4],
             'versao': carro[5],
             'cor': carro[6],
-            'cambio': carro[7],
-            'combustivel': carro[8],
-            'categoria': carro[9],
-            'quilometragem': carro[10],
-            'estado': carro[11],
-            'cidade': carro[12],
-            'preco_compra': carro[13],
-            'preco_venda': carro[14],
-            'licenciado': carro[15],
-            'placa': carro[16],
-            'criado_em': carro[17],
-            'ativo': carro[18]
+            'renavam': carro[7],
+            'cambio': carro[8],
+            'combustivel': carro[9],
+            'categoria': carro[10],
+            'quilometragem': carro[11],
+            'estado': carro[12],
+            'cidade': carro[13],
+            'preco_compra': carro[14],
+            'preco_venda': carro[15],
+            'licenciado': carro[16],
+            'placa': carro[17],
+            'criado_em': carro[18],
+            'ativo': carro[19]
         })
 
     qnt_carros = len(lista_carros)
@@ -56,7 +57,7 @@ def add_carro():
     # Lista de campos obrigatórios
     required_fields = [
         'marca', 'modelo', 'ano_modelo', 'ano_fabricacao', 'versao',
-        'cor', 'cambio', 'combustivel', 'categoria', 'quilometragem',
+        'cor', 'renavam', 'cambio', 'combustivel', 'categoria', 'quilometragem',
         'estado', 'cidade', 'preco_compra', 'preco_venda', 'placa'
     ]
 
@@ -84,6 +85,7 @@ def add_carro():
     ano_fabricacao = data.get('ano_fabricacao')
     versao = data.get('versao')
     cor = data.get('cor')
+    renavam = data.get('renavam')
     cambio = data.get('cambio')
     combustivel = data.get('combustivel')
     categoria = data.get('categoria')
@@ -103,11 +105,11 @@ def add_carro():
 
     cursor.execute('''
     INSERT INTO CARROS
-    (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria, 
+    (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria, 
     quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo)
     VALUES
     (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)  RETURNING ID_CARRO
-    ''', (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria,
+    ''', (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria,
     quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo))
 
 
@@ -137,6 +139,7 @@ def add_carro():
             'ano_fabricacao': ano_fabricacao,
             'versao': versao,
             'cor': cor,
+            'renavam': renavam,
             'cambio': cambio,
             'combustivel': combustivel,
             'categoria': categoria,
@@ -183,13 +186,13 @@ def editar_carro(id):
     data = request.get_json()
     fields = [
         'marca', 'modelo', 'ano_modelo', 'ano_fabricacao', 'versao',
-        'cor', 'cambio', 'combustivel', 'categoria', 'quilometragem',
+        'cor', 'renavam', 'cambio', 'combustivel', 'categoria', 'quilometragem',
         'estado', 'cidade', 'preco_compra', 'preco_venda', 'licenciado',
         'placa', 'ativo'
     ]
 
     cursor.execute('''
-        SELECT marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria, 
+        SELECT marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria, 
         quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, ativo
         FROM CARROS WHERE ID_CARRO = ?
     ''', (id,))
@@ -209,6 +212,7 @@ def editar_carro(id):
     ano_fabricacao = data.get('ano_fabricacao')
     versao = data.get('versao')
     cor = data.get('cor')
+    renavam = data.get('renavam')
     cambio = data.get('cambio')
     combustivel = data.get('combustivel')
     categoria = data.get('categoria')
@@ -223,10 +227,10 @@ def editar_carro(id):
 
     cursor.execute('''
         UPDATE CARROS
-        SET marca =?, modelo =?, ano_modelo =?, ano_fabricacao =?, versao =?, cor =?, cambio =?, combustivel =?, categoria =?, 
+        SET marca =?, modelo =?, ano_modelo =?, ano_fabricacao =?, versao =?, cor =?, renavam =?, cambio =?, combustivel =?, categoria =?, 
         quilometragem =?, estado =?, cidade =?, preco_compra =?, preco_venda =?, licenciado =?, placa =?, ativo =?
         where ID_CARRO = ?
-        ''', (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, cambio, combustivel, categoria,
+        ''', (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria,
               quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, ativo, id))
 
     con.commit()
@@ -241,6 +245,7 @@ def editar_carro(id):
             'ano_fabricacao': ano_fabricacao,
             'versao': versao,
             'cor': cor,
+            'renavam': renavam,
             'cambio': cambio,
             'combustivel': combustivel,
             'categoria': categoria,
