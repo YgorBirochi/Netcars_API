@@ -62,6 +62,19 @@ def get_moto():
 
 @app.route('/moto/upload_img/<int:id>', methods=['POST'])
 def upload_img_moto(id):
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'mensagem': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'mensagem': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'mensagem': 'Token inválido'}), 401
+
     imagens = request.files.getlist('imagens')
 
     if not imagens:
@@ -88,6 +101,19 @@ def upload_img_moto(id):
 
 @app.route('/moto', methods=['POST'])
 def add_moto():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'mensagem': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'mensagem': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'mensagem': 'Token inválido'}), 401
+
     token = request.headers.get('Authorization')
     if not token:
         return jsonify({'error': 'Token de autenticação necessário.'}), 401
