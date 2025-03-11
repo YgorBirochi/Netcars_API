@@ -110,7 +110,7 @@ def add_carro():
     preco_compra = data.get('preco_compra')
     preco_venda = data.get('preco_venda')
     licenciado = data.get('licenciado')
-    placa = data.get('placa')
+    placa = data.get('placa').upper()
     ativo = 1
 
     # Alterando fuso horário para o de Brasília
@@ -224,7 +224,7 @@ def editar_carro(id):
     preco_compra = data.get('preco_compra')
     preco_venda = data.get('preco_venda')
     licenciado = data.get('licenciado')
-    placa = data.get('placa')
+    placa = data.get('placa').upper()
     ativo = data.get('ativo')
 
     cursor.execute('''

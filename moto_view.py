@@ -118,7 +118,7 @@ def add_moto():
     quilometragem = data.get('quilometragem')
     preco_compra = data.get('preco_compra')
     preco_venda = data.get('preco_venda')
-    placa = data.get('placa')
+    placa = data.get('placa').upper()
     alimentacao = data.get('alimentacao')
     licenciado = data.get('licenciado')
     ativo = 1
@@ -245,7 +245,7 @@ def editar_moto(id):
     quilometragem = data.get('quilometragem')
     preco_compra = data.get('preco_compra')
     preco_venda = data.get('preco_venda')
-    placa = data.get('placa')
+    placa = data.get('placa').upper()
     alimentacao = data.get('alimentacao')
     ativo = data.get('ativo')
     criado_em = data.get('criado_em')
