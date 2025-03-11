@@ -2,3 +2,6 @@
 venv
 .idea
 __pycache__
+relatorio_carros.pdf
+relatorio_motos.pdf
+relatorio_usuarios.pdf
