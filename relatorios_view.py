@@ -267,7 +267,7 @@ def criar_pdf_usuarios():
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    usuarios_por_pagina = 6
+    usuarios_por_pagina = 7
     contador = 0
 
     for usuario in usuarios:
