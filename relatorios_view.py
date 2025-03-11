@@ -182,11 +182,10 @@ def criar_pdf_carro():
     pdf.output(pdf_path)
     return send_file(pdf_path, as_attachment=True, mimetype='application/pdf')
 
-
 @app.route('/relatorio/motos', methods=['GET'])
 def criar_pdf_moto():
     cursor = con.cursor()
-    cursor.execute("SELECT marca, modelo, placa, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, alimentacao, versao, estado, cidade, quilometragem, preco_compra, preco_venda, licenciado FROM motos")
+    cursor.execute("SELECT marca, modelo, placa, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, alimentacao, estado, cidade, quilometragem, preco_compra, preco_venda, licenciado FROM motos")
     motos = cursor.fetchall()
     cursor.close()
 
@@ -220,33 +219,27 @@ def criar_pdf_moto():
             ("Freio D/T", moto[12]),
             ("Refrigeração", moto[13]),
             ("Alimentação", moto[14]),
-            ("Quilometragem", format_kilometragem(moto[18])),
-            ("Estado", moto[16]),
-            ("Cidade", moto[17]),
-            ("Preço Compra", format_currency(moto[19])),
-            ("Preço Venda", format_currency(moto[20])),
-            ("Licenciado", "Sim" if moto[21] == 1 else "Não"),
-            ("Versão", moto[15])
+            ("Estado", moto[15]),
+            ("Cidade", moto[16]),
+            ("Quilometragem", format_kilometragem(moto[17])),
+            ("Preço Compra", format_currency(moto[18])),
+            ("Preço Venda", format_currency(moto[19])),
+            ("Licenciado", "Sim" if moto[20] == 1 else "Não")
         ]
 
-        for i in range(0, len(campos) - 1, 2):
+        for i in range(0, len(campos), 2):
             pdf.set_font("Arial", "B", 12)
             pdf.cell(35, 10, f"{campos[i][0]}:", border=0)
             pdf.set_font("Arial", "", 12)
             pdf.cell(40, 10, str(campos[i][1]), border=0)
 
-            if i + 1 < len(campos) - 1:
+            if i + 1 < len(campos):
                 pdf.set_x(120)
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(35, 10, f"{campos[i + 1][0]}:", border=0)
                 pdf.set_font("Arial", "", 12)
                 pdf.cell(40, 10, str(campos[i + 1][1]), border=0)
             pdf.ln(8)
-
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(35, 10, "Versão:", border=0)
-        pdf.set_font("Arial", "", 12)
-        pdf.multi_cell(0, 10, str(campos[-1][1]), border=0)
 
         pdf.ln(5)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
