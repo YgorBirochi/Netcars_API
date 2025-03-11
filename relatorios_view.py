@@ -196,7 +196,7 @@ def criar_pdf_moto():
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    motos_por_pagina = 3
+    motos_por_pagina = 2
     contador = 0
 
     for moto in motos:
