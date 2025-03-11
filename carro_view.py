@@ -1,5 +1,5 @@
 from flask import Flask, jsonify, request
-from main import app, con
+from main import app, con, upload_folder
 from datetime import datetime
 import pytz
 import os, uuid
@@ -48,7 +48,32 @@ def get_carro():
         'veiculos': lista_carros
     }), 200
 
+@app.route('/carro/upload_img/<int:id>', methods=['POST'])
+def upload_img(id):
+    imagens = request.files.getlist('imagens')
 
+    if not imagens:
+        return jsonify({
+            'error': 'Dados incompletos',
+            'missing_fields': 'Imagens'
+        }), 400
+
+
+    # Define a pasta destino usando o id do carro
+    pasta_destino = os.path.join(upload_folder, "Carros", str(id))
+    os.makedirs(pasta_destino, exist_ok=True)
+
+    # Salva cada imagem na pasta, nomeando sequencialmente (1.jpeg, 2.jpeg, 3.jpeg, ...)
+    saved_images = []  # para armazenar os nomes dos arquivos salvos
+    for index, imagem in enumerate(imagens, start=1):
+        nome_imagem = f"{index}.jpeg"
+        imagem_path = os.path.join(pasta_destino, nome_imagem)
+        imagem.save(imagem_path)
+        saved_images.append(nome_imagem)
+
+    return jsonify({
+        'success': "Imagens adicionadas!"
+    }), 200
 
 @app.route('/carro', methods=['POST'])
 def add_carro():
@@ -58,26 +83,16 @@ def add_carro():
     required_fields = [
         'marca', 'modelo', 'ano_modelo', 'ano_fabricacao', 'versao',
         'cor', 'renavam', 'cambio', 'combustivel', 'categoria', 'quilometragem',
-        'estado', 'cidade', 'preco_compra', 'preco_venda', 'placa'
+        'estado', 'cidade', 'preco_compra', 'preco_venda', 'licenciado', 'placa'
     ]
 
     missing_fields = [field for field in required_fields if not data.get(field)]
 
     if missing_fields:
         return jsonify({
-            'error': 'Dados incompletos.',
+            'error': 'Dados incompletos',
             'missing_fields': missing_fields
         }), 400
-
-    # Imagens do veículo
-    imagens = request.files.getlist('imagens')
-
-    if not imagens:
-        return jsonify({
-            'error': 'Dados incompletos.',
-            'missing_fields': "imagem"
-        }), 400
-
 
     marca = data.get('marca')
     modelo = data.get('modelo')
@@ -95,7 +110,7 @@ def add_carro():
     preco_compra = data.get('preco_compra')
     preco_venda = data.get('preco_venda')
     licenciado = data.get('licenciado')
-    placa = data.get('placa')
+    placa = data.get('placa').upper()
     ativo = 1
 
     # Alterando fuso horário para o de Brasília
@@ -104,35 +119,23 @@ def add_carro():
     cursor = con.cursor()
 
     cursor.execute('''
-    INSERT INTO CARROS
-    (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria, 
-    quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo)
-    VALUES
-    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)  RETURNING ID_CARRO
-    ''', (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria,
-    quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo))
-
+        INSERT INTO CARROS
+        (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria, 
+        quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo)
+        VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)  RETURNING ID_CARRO
+        ''', (marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria,
+              quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo))
 
     id_carro = cursor.fetchone()[0]
     con.commit()
-
-    # Define a pasta destino usando o id da moto
-    pasta_destino = os.path.join(upload_folder, "Carros", str(id_carro))
-    os.makedirs(pasta_destino, exist_ok=True)
-
-    # Salva cada imagem na pasta, nomeando sequencialmente (1.jpeg, 2.jpeg, 3.jpeg, ...)
-    saved_images = []  # para armazenar os nomes dos arquivos salvos
-    for index, imagem in enumerate(imagens, start=1):
-        nome_imagem = f"{index}.jpeg"
-        imagem_path = os.path.join(pasta_destino, nome_imagem)
-        imagem.save(imagem_path)
-        saved_images.append(nome_imagem)
 
     cursor.close()
 
     return jsonify({
         'success': "Veículo cadastrado com sucesso!",
         'dados': {
+            'id_carro': id_carro,
             'marca': marca,
             'modelo': modelo,
             'ano_modelo': ano_modelo,
@@ -151,8 +154,7 @@ def add_carro():
             'licenciado': licenciado,
             'placa': placa,
             'criado_em': criado_em,
-            'ativo': ativo,
-            'imagens_salvas': saved_images
+            'ativo': ativo
         }
     }), 200
 
@@ -222,7 +224,7 @@ def editar_carro(id):
     preco_compra = data.get('preco_compra')
     preco_venda = data.get('preco_venda')
     licenciado = data.get('licenciado')
-    placa = data.get('placa')
+    placa = data.get('placa').upper()
     ativo = data.get('ativo')
 
     cursor.execute('''

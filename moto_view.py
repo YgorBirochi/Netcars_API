@@ -11,7 +11,7 @@ def get_moto():
     cursor.execute('''
     SELECT marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, tipo_motor, 
         cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
-        preco_compra, preco_venda, placa, alimentacao, criado_em, ativo, versao FROM MOTOS
+        preco_compra, preco_venda, placa, alimentacao, criado_em, ativo FROM MOTOS
     ''')
 
     fetch = cursor.fetchall()
@@ -42,8 +42,7 @@ def get_moto():
             'placa': moto[19],
             'alimentacao': moto[20],
             'criado_em': moto[21],
-            'ativo': moto[22],
-            'versao': moto[23]
+            'ativo': moto[22]
         })
 
     qnt_motos = len(lista_motos)
@@ -53,6 +52,32 @@ def get_moto():
         'veiculos': lista_motos
     }), 200
 
+
+@app.route('/moto/upload_img/<int:id>', methods=['POST'])
+def upload_img_moto(id):
+    imagens = request.files.getlist('imagens')
+
+    if not imagens:
+        return jsonify({
+            'error': 'Dados incompletos',
+            'missing_fields': 'Imagens'
+        }), 400
+
+    # Define a pasta destino usando o id do carro
+    pasta_destino = os.path.join(upload_folder, "Motos", str(id))
+    os.makedirs(pasta_destino, exist_ok=True)
+
+    # Salva cada imagem na pasta, nomeando sequencialmente (1.jpeg, 2.jpeg, 3.jpeg, ...)
+    saved_images = []  # para armazenar os nomes dos arquivos salvos
+    for index, imagem in enumerate(imagens, start=1):
+        nome_imagem = f"{index}.jpeg"
+        imagem_path = os.path.join(pasta_destino, nome_imagem)
+        imagem.save(imagem_path)
+        saved_images.append(nome_imagem)
+
+    return jsonify({
+        'success': "Imagens adicionadas!"
+    }), 200
 
 @app.route('/moto', methods=['POST'])
 def add_moto():
@@ -64,24 +89,15 @@ def add_moto():
         'cor', 'renavam', 'marchas', 'partida', 'tipo_motor', 'cilindrada',
         'freio_dianteiro_traseiro', 'refrigeracao', 'estado', 'cidade',
         'quilometragem', 'preco_compra', 'preco_venda', 'placa',
-        'alimentacao', 'versao'
+        'alimentacao', 'licenciado'
     ]
 
     missing_fields = [field for field in required_fields if not data.get(field)]
 
     if missing_fields:
         return jsonify({
-            'error': 'Dados incompletos.',
+            'error': 'Dados incompletos',
             'missing_fields': missing_fields
-        }), 400
-
-    # Imagens do veículo
-    imagens = request.files.getlist('imagens')
-
-    if not imagens:
-        return jsonify({
-            'error': 'Dados incompletos.',
-            'missing_fields': "imagem"
         }), 400
 
     marca = data.get('marca')
@@ -102,9 +118,9 @@ def add_moto():
     quilometragem = data.get('quilometragem')
     preco_compra = data.get('preco_compra')
     preco_venda = data.get('preco_venda')
-    placa = data.get('placa')
+    placa = data.get('placa').upper()
     alimentacao = data.get('alimentacao')
-    versao = data.get('versao')
+    licenciado = data.get('licenciado')
     ativo = 1
 
     # Alterando fuso horário para o de Brasília
@@ -115,34 +131,23 @@ def add_moto():
     cursor.execute('''
     INSERT INTO MOTOS
     (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, 
-    tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, 
-    quilometragem, preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, versao)
+    tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
+    preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado)
     VALUES
-    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ID_MOTO
+    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ID_MOTO
     ''', (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida,
     tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem,
-    preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, versao))
+    preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado))
 
     id_moto = cursor.fetchone()[0]
     con.commit()
-
-    # Define a pasta destino usando o id da moto
-    pasta_destino = os.path.join(upload_folder, "Motos", str(id_moto))
-    os.makedirs(pasta_destino, exist_ok=True)
-
-    # Salva cada imagem na pasta, nomeando sequencialmente (1.jpeg, 2.jpeg, 3.jpeg, ...)
-    saved_images = []  # para armazenar os nomes dos arquivos salvos
-    for index, imagem in enumerate(imagens, start=1):
-        nome_imagem = f"{index}.jpeg"
-        imagem_path = os.path.join(pasta_destino, nome_imagem)
-        imagem.save(imagem_path)
-        saved_images.append(nome_imagem)
 
     cursor.close()
 
     return jsonify({
         'success': "Veículo cadastrado com sucesso!",
         'dados': {
+            'id_moto': id_moto,
             'marca': marca,
             'modelo': modelo,
             'ano_modelo': ano_modelo,
@@ -150,6 +155,7 @@ def add_moto():
             'categoria': categoria,
             'cor': cor,
             'renavam': renavam,
+            'licenciado': licenciado,
             'marchas': marchas,
             'partida': partida,
             'tipo_motor': tipo_motor,
@@ -164,9 +170,7 @@ def add_moto():
             'placa': placa,
             'alimentacao': alimentacao,
             'criado_em': criado_em,
-            'ativo': ativo,
-            'versao': versao,
-            'imagens_salvas': saved_images
+            'ativo': ativo
         }
     }), 200
 
@@ -204,13 +208,13 @@ def editar_moto(id):
         'cor', 'renavam', 'marchas', 'partida', 'tipo_motor', 'cilindrada',
         'freio_dianteiro_traseiro', 'refrigeracao', 'estado', 'cidade',
         'quilometragem', 'preco_compra', 'preco_venda', 'placa', 'alimentacao',
-        'ativo', 'versao'
+        'ativo', 'licenciado'
     ]
 
     cursor.execute('''
-        SELECT marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, 
-        tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
-        preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, versao
+        SELECT marca, modelo, ano_modelo, ano_fabricacao, licenciado, categoria, cor, renavam, marchas, 
+        partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, 
+        quilometragem, preco_compra, preco_venda, placa, criado_em, ativo, alimentacao
         FROM MOTOS WHERE ID_MOTO = ?
     ''', (id,))
 
@@ -241,22 +245,22 @@ def editar_moto(id):
     quilometragem = data.get('quilometragem')
     preco_compra = data.get('preco_compra')
     preco_venda = data.get('preco_venda')
-    placa = data.get('placa')
+    placa = data.get('placa').upper()
     alimentacao = data.get('alimentacao')
     ativo = data.get('ativo')
-    versao = data.get('versao')
     criado_em = data.get('criado_em')
+    licenciado = data.get('licenciado')
 
     cursor.execute('''
         UPDATE MOTOS
         SET marca =?, modelo =?, ano_modelo =?, ano_fabricacao =?, categoria =?, cor =?, renavam = ?, marchas =?, partida =?, 
         tipo_motor =?, cilindrada=?, freio_dianteiro_traseiro =?, refrigeracao, =?, estado =?, cidade =?,  quilometragem =?, 
-        preco_compra =?, preco_venda =?, placa =?, criado_em = ?, ativo =?, alimentacao =?, versao =?
+        preco_compra =?, preco_venda =?, placa =?, criado_em = ?, ativo =?, alimentacao =?, licenciado =?
         where ID_MOTO = ?
         ''',
        (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida,
         tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade,
-        quilometragem, preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, versao))
+        quilometragem, preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado))
 
     con.commit()
     cursor.close()
@@ -266,9 +270,9 @@ def editar_moto(id):
         'dados': {
             'marca': marca,
             'modelo': modelo,
-            'versao': versao,
             'ano_modelo': ano_modelo,
             'ano_fabricacao': ano_fabricacao,
+            'licenciado': licenciado,
             'categoria': categoria,
             'cor': cor,
             'renavam': renavam,
