@@ -1,8 +1,15 @@
 from flask import Flask, jsonify, request
-from main import app, con, upload_folder
+from main import app, con, upload_folder, senha_secreta
 from datetime import datetime
 import pytz
 import os, uuid
+import jwt
+
+def remover_bearer(token):
+    if token.startswith('Bearer '):
+        return token[len('Bearer '):]
+    else:
+        return token
 
 @app.route('/carro', methods=['GET'])
 def get_carro():
@@ -225,6 +232,7 @@ def editar_carro(id):
     preco_venda = data.get('preco_venda')
     licenciado = data.get('licenciado')
     placa = data.get('placa').upper()
+
     ativo = data.get('ativo')
 
     cursor.execute('''

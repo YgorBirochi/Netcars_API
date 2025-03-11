@@ -1,7 +1,14 @@
 from flask import Flask, jsonify, request
-from main import app, con
+from main import app, con, senha_secreta
 import re
 from flask_bcrypt import generate_password_hash, check_password_hash
+import jwt
+from datetime import datetime, timedelta
+
+def generate_token(user_id):
+    payload = {'id_usuario': user_id}
+    token = jwt.encode(payload, senha_secreta, algorithm='HS256')
+    return token
 
 def validar_senha(senha):
     if len(senha) < 8:
@@ -48,7 +55,7 @@ def create_user():
     cursor.execute("SELECT 1 FROM USUARIO WHERE email = ?", (email,))
 
     if cursor.fetchone():
-        return jsonify({'message': 'Email já cadastrado'}), 400
+        return jsonify({'error': 'Email já cadastrado'}), 400
 
     senha_check = validar_senha(senha)
     if senha_check is not True:
@@ -86,7 +93,7 @@ def update_user(id):
 
     cursor = con.cursor()
 
-    cursor.execute("SELECT ID_USUARIO, NOME_COMPLETO, DATA_NASCIMENTO, CPF_CNPJ, TELEFONE, EMAIL, SENHA_HASH FROM USUARIO WHERE id_usuario = ?", (id,))
+    cursor.execute("SELECT ID_USUARIO, NOME_COMPLETO, DATA_NASCIMENTO, CPF_CNPJ, TELEFONE, EMAIL, SENHA_HASH, ATUALIZADO_EM FROM USUARIO WHERE id_usuario = ?", (id,))
     user_data = cursor.fetchone()
 
     if not user_data:
@@ -99,9 +106,18 @@ def update_user(id):
         if cursor.fetchone():
             return jsonify({'error': 'Email já cadastrado'}), 404
 
+    if user_data[7] is not None:
+        ultima_atualizacao = user_data[7]
+        if datetime.now() - ultima_atualizacao < timedelta(hours=24):
+            cursor.close()
+            return jsonify({
+                'error': 'Você só pode atualizar novamente após 24 horas da última atualização.'
+            }), 403
+
+    data_att = datetime.now()
     if not senha_nova and not senha_hash:
-        cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ? WHERE id_usuario = ?",
-            (nome_completo, data_nascimento, cpf_cnpj, telefone, email, id))
+        cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, ATUALIZADO_EM = ? WHERE id_usuario = ?",
+            (nome_completo, data_nascimento, cpf_cnpj, telefone, email, data_att, id))
         con.commit()
         cursor.close()
         return jsonify({
@@ -126,8 +142,8 @@ def update_user(id):
     else:
         return jsonify({"error": "Senha atual incorreta."}), 401
 
-    cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ? WHERE id_usuario = ?",
-                   (nome_completo, data_nascimento, cpf_cnpj, telefone, email, senha_enviada, id))
+    cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ?, ATUALIZAD_EM = ? WHERE id_usuario = ?",
+                   (nome_completo, data_nascimento, cpf_cnpj, telefone, email, senha_enviada, data_att, id))
 
     con.commit()
     cursor.close()
@@ -143,6 +159,32 @@ def update_user(id):
         }
     })
 
+@app.route('/cadastro/<int:id>', methods=['DELETE'])
+def deletar_usuario(id):
+    cursor = con.cursor()
+
+    cursor.execute('SELECT ID_USUARIO FROM USUARIO')
+
+    possui_id = False
+    for i in cursor.fetchall():
+        if i[0] == id:
+            possui_id = True
+
+    if possui_id == False:
+        return jsonify({
+            'error': 'Usuário não encontrado.'
+        })
+
+    cursor.execute('''
+        DELETE FROM USUARIO WHERE ID_USUARIO = ?
+    ''', (id,))
+
+    con.commit()
+    cursor.close()
+
+    return jsonify({
+        'success': 'Usuário deletado com sucesso!'
+    })
 
 tentativas = 0
 
@@ -180,6 +222,7 @@ def login_user():
         return jsonify({'error': 'Usuário inativo'}), 401
 
     if check_password_hash(senha_hash, senha):
+        token = generate_token(id_usuario)
         tentativas = 0
         cursor.close()
         return jsonify({
@@ -191,7 +234,8 @@ def login_user():
                 "data_nascimento": data_nascimento,
                 "cpf_cnpj": cpf_cnpj,
                 "telefone": telefone,
-                "tipo_usuario": tipo_usuario
+                "tipo_usuario": tipo_usuario,
+                "token": token
             }
         })
 

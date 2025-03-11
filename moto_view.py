@@ -1,8 +1,15 @@
 from flask import Flask, jsonify, request
-from main import app, con, upload_folder
+from main import app, con, upload_folder, senha_secreta
 from datetime import datetime
 import pytz
 import os, uuid
+import jwt
+
+def remover_bearer(token):
+    if token.startswith('Bearer '):
+        return token[len('Bearer '):]
+    else:
+        return token
 
 @app.route('/moto', methods=['GET'])
 def get_moto():
@@ -81,6 +88,19 @@ def upload_img_moto(id):
 
 @app.route('/moto', methods=['POST'])
 def add_moto():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário.'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado.'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido.'}), 401
+
     data = request.get_json()
 
     # Lista de campos obrigatórios

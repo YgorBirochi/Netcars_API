@@ -12,6 +12,7 @@ database = app.config['DB_NAME']
 user = app.config['DB_USER']
 password = app.config['DB_PASSWORD']
 
+senha_secreta = app.config['SECRET_KEY']
 upload_folder = app.config['UPLOAD_FOLDER']
 
 try:
