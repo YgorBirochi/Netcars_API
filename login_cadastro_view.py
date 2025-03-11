@@ -142,7 +142,7 @@ def update_user(id):
     else:
         return jsonify({"error": "Senha atual incorreta."}), 401
 
-    cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ?, ATUALIZAD_EM = ? WHERE id_usuario = ?",
+    cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ?, ATUALIZADO_EM = ? WHERE id_usuario = ?",
                    (nome_completo, data_nascimento, cpf_cnpj, telefone, email, senha_enviada, data_att, id))
 
     con.commit()
