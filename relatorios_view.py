@@ -4,12 +4,13 @@ from fpdf import FPDF
 from datetime import datetime
 import re
 
+# Formatção de informações
+
 def format_currency(value):
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def format_kilometragem(value):
     return f"{value:,} km".replace(",", ".")
-
 
 def format_phone(phone):
     # Se não houver informação, retorna None
@@ -59,6 +60,11 @@ def format_date(date_value):
     except ValueError:
         # Se não conseguir, retorna o valor convertido para string
         return str(date_value)
+
+# Fim das formatações
+
+# Class para título de cada Página
+
 class CustomCarroPDF(FPDF):
     def header(self):
         self.set_font("Arial", "B", 16)
@@ -99,6 +105,10 @@ class CustomUsuarioPDF(FPDF):
         self.cell(0, 10, f"Página {self.page_no()}", align="C")
 
 
+# Fim das Class
+
+# Início das Rotas
+
 @app.route('/relatorio/carros', methods=['GET'])
 def criar_pdf_carro():
     cursor = con.cursor()
@@ -121,12 +131,22 @@ def criar_pdf_carro():
             contador = 0
 
         campos = [
-            ("Marca", carro[0]), ("Modelo", carro[1]), ("Placa", carro[2]),
-            ("Ano Modelo", carro[3]), ("Ano Fabricação", carro[4]), ("Cor", carro[5]),
-            ("Renavam", carro[6]), ("Câmbio", carro[7]), ("Combustível", carro[8]),
-            ("Categoria", carro[9]), ("Quilometragem", format_kilometragem(carro[10])),
-            ("Estado", carro[11]), ("Cidade", carro[12]), ("Preço Compra", format_currency(carro[13])),
-            ("Preço Venda", format_currency(carro[14])), ("Licenciado", "Sim" if carro[15] == 1 else "Não"),
+            ("Marca", carro[0]),
+            ("Modelo", carro[1]),
+            ("Placa", carro[2]),
+            ("Ano Modelo", carro[3]),
+            ("Ano Fabricação", carro[4]),
+            ("Cor", carro[5]),
+            ("Renavam", carro[6]),
+            ("Câmbio", carro[7]),
+            ("Combustível", carro[8]),
+            ("Categoria", carro[9]),
+            ("Quilometragem", format_kilometragem(carro[10])),
+            ("Estado", carro[11]),
+            ("Cidade", carro[12]),
+            ("Preço Compra", format_currency(carro[13])),
+            ("Preço Venda", format_currency(carro[14])),
+            ("Licenciado", "Sim" if carro[15] == 1 else "Não"),
             ("Versão", carro[16])
         ]
 
@@ -185,14 +205,28 @@ def criar_pdf_moto():
             contador = 0
 
         campos = [
-            ("Marca", moto[0]), ("Modelo", moto[1]), ("Placa", moto[2]),
-            ("Ano Modelo", moto[3]), ("Ano Fabricação", moto[4]), ("Categoria", moto[5]),
-            ("Cor", moto[6]), ("Renavam", moto[7]), ("Marchas", moto[8]),
-            ("Partida", moto[9]), ("Tipo do Motor", moto[10]), ("Cilindradas", moto[11]),
-            ("Freio D/T", moto[12]), ("Refrigeração", moto[13]), ("Alimentação", moto[14]),
-            ("Quilometragem", format_kilometragem(moto[18])), ("Estado", moto[16]), ("Cidade", moto[17]),
-            ("Preço Compra", format_currency(moto[19])), ("Preço Venda", format_currency(moto[20])),
-            ("Licenciado", "Sim" if moto[21] == 1 else "Não"), ("Versão", moto[15])
+            ("Marca", moto[0]),
+            ("Modelo", moto[1]),
+            ("Placa", moto[2]),
+            ("Ano Modelo", moto[3]),
+            ("Ano Fabricação", moto[4]),
+            ("Categoria", moto[5]),
+            ("Cor", moto[6]),
+            ("Renavam", moto[7]),
+            ("Marchas", moto[8]),
+            ("Partida", moto[9]),
+            ("Tipo do Motor", moto[10]),
+            ("Cilindradas", moto[11]),
+            ("Freio D/T", moto[12]),
+            ("Refrigeração", moto[13]),
+            ("Alimentação", moto[14]),
+            ("Quilometragem", format_kilometragem(moto[18])),
+            ("Estado", moto[16]),
+            ("Cidade", moto[17]),
+            ("Preço Compra", format_currency(moto[19])),
+            ("Preço Venda", format_currency(moto[20])),
+            ("Licenciado", "Sim" if moto[21] == 1 else "Não"),
+            ("Versão", moto[15])
         ]
 
         for i in range(0, len(campos) - 1, 2):
@@ -283,3 +317,5 @@ def criar_pdf_usuarios():
     pdf_path = "relatorio_usuarios.pdf"
     pdf.output(pdf_path)
     return send_file(pdf_path, as_attachment=True, mimetype='application/pdf')
+
+# Fim das Rotas
