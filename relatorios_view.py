@@ -176,7 +176,7 @@ def criar_pdf_carro():
         contador += 1
 
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, f"Total de veículos: {total_veiculos}", ln=True, align="C")
+    pdf.cell(0, 10, f"Total de carros: {total_veiculos}", ln=True, align="C")
 
     pdf_path = "relatorio_carros.pdf"
     pdf.output(pdf_path)
@@ -255,7 +255,7 @@ def criar_pdf_moto():
         contador += 1
 
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, f"Total de veículos: {total_veiculos}", ln=True, align="C")
+    pdf.cell(0, 10, f"Total de motos: {total_veiculos}", ln=True, align="C")
 
     pdf_path = "relatorio_motos.pdf"
     pdf.output(pdf_path)
