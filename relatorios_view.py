@@ -203,7 +203,7 @@ def criar_pdf_carro():
 
     pdf_path = "relatorio_carros.pdf"
     pdf.output(pdf_path)
-    return send_file(pdf_path, as_attachment=True, mimetype='application/pdf')
+    return send_file(pdf_path, mimetype='application/pdf', as_attachment=False)
 
 @app.route('/relatorio/motos', methods=['GET'])
 def criar_pdf_moto():
@@ -299,7 +299,7 @@ def criar_pdf_moto():
 
     pdf_path = "relatorio_motos.pdf"
     pdf.output(pdf_path)
-    return send_file(pdf_path, as_attachment=True, mimetype='application/pdf')
+    return send_file(pdf_path, mimetype='application/pdf', as_attachment=False)
 
 @app.route('/relatorio/usuarios', methods=['GET'])
 def criar_pdf_usuarios():
@@ -356,6 +356,6 @@ def criar_pdf_usuarios():
 
     pdf_path = "relatorio_usuarios.pdf"
     pdf.output(pdf_path)
-    return send_file(pdf_path, as_attachment=True, mimetype='application/pdf')
+    return send_file(pdf_path, mimetype='application/pdf', as_attachment=False)
 
 # Fim das Rotas
