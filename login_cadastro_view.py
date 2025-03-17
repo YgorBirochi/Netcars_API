@@ -248,4 +248,4 @@ def login_user():
         cursor.close()
         return jsonify({"error": "Número máximo de tentativas de login excedido."}), 401
 
-    return jsonify({"error": "Senha incorreta."}), 401
+    return jsonify({"error": "Senha incorreta."}), 401 

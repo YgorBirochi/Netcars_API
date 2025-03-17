@@ -19,7 +19,7 @@ def format_phone(phone):
     # Converte para string
     phone_str = str(phone)
     # Remove tudo que não for dígito
-    digits = re.sub(r'\D', '', phone_str)
+    digits = re.sub(r'\D', '', phone_str) 
 
     if len(digits) == 11:
         # Formata como (XX) XXXXX-XXXX
