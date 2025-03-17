@@ -93,13 +93,13 @@ def update_user(id):
 
     cursor = con.cursor()
 
-    cursor.execute("SELECT ID_USUARIO FROM USUARIOS WHERE CPF_CNPJ = ?", (cpf_cnpj,))
+    cursor.execute("SELECT ID_USUARIO FROM USUARIO WHERE CPF_CNPJ = ?", (cpf_cnpj,))
     if cursor.fetchone():
         return jsonify({
             'error': 'CPF/CNPJ já cadastrado'
         })
 
-    cursor.execute("SELECT ID_USUARIO FROM USUARIOS WHERE telefone = ?", (telefone,))
+    cursor.execute("SELECT ID_USUARIO FROM USUARIO WHERE telefone = ?", (telefone,))
     if cursor.fetchone():
         return jsonify({
             'error': 'Telefone já cadastrado'
