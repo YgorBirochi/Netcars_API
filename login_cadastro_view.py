@@ -94,18 +94,16 @@ def update_user(id):
     cursor = con.cursor()
 
     cursor.execute("SELECT ID_USUARIO FROM USUARIOS WHERE CPF_CNPJ = ?", (cpf_cnpj,))
-    if cursor.fetchone() {
+    if cursor.fetchone():
         return jsonify({
             'error': 'CPF/CNPJ já cadastrado'
         })
-    }
 
     cursor.execute("SELECT ID_USUARIO FROM USUARIOS WHERE telefone = ?", (telefone,))
-    if cursor.fetchone() {
+    if cursor.fetchone():
         return jsonify({
             'error': 'Telefone já cadastrado'
         })
-    }
 
     cursor.execute("SELECT ID_USUARIO, NOME_COMPLETO, DATA_NASCIMENTO, CPF_CNPJ, TELEFONE, EMAIL, SENHA_HASH, ATUALIZADO_EM FROM USUARIO WHERE id_usuario = ?", (id,))
     user_data = cursor.fetchone()
