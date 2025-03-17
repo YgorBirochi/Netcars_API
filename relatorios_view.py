@@ -301,10 +301,43 @@ def criar_pdf_moto():
     pdf.output(pdf_path)
     return send_file(pdf_path, mimetype='application/pdf', as_attachment=False)
 
+
 @app.route('/relatorio/usuarios', methods=['GET'])
 def criar_pdf_usuarios():
+    # Obtendo parâmetros de filtro via query string
+    nome = request.args.get('nome')
+    telefone = request.args.get('telefone')
+    data_nascimento = request.args.get('data_nascimento')  # Formato: 'YYYY-MM-DD'
+    ativo = request.args.get('ativo')  # Exemplo: "1" para ativo ou "0" para inativo
+
+    # Monta a query dinamicamente
+    query = "SELECT nome_completo, telefone, cpf_cnpj, data_nascimento, ativo FROM usuario WHERE 1=1"
+    params = []
+
+    if nome:
+        query += " AND UPPER(nome_completo) LIKE ?"
+        params.append('%' + nome.upper() + '%')
+
+    if telefone:
+        # Se o telefone informado tiver exatamente 11 dígitos, fazemos comparação exata,
+        # evitando adicionar wildcards que ultrapassem o tamanho permitido.
+        if len(telefone) == 11:
+            query += " AND telefone = ?"
+            params.append(telefone)
+        else:
+            query += " AND telefone LIKE ?"
+            params.append('%' + telefone + '%')
+
+    if data_nascimento:
+        query += " AND data_nascimento = ?"
+        params.append(data_nascimento)
+
+    if ativo is not None:
+        query += " AND ativo = ?"
+        params.append(int(ativo))
+
     cursor = con.cursor()
-    cursor.execute("SELECT nome_completo, email, telefone, cpf_cnpj, data_nascimento, ativo FROM usuario")
+    cursor.execute(query, params)
     usuarios = cursor.fetchall()
     cursor.close()
 
@@ -324,11 +357,10 @@ def criar_pdf_usuarios():
 
         campos = [
             ("Nome", usuario[0]),
-            ("Email", usuario[1]),
-            ("Telefone", format_phone(usuario[2])),
-            ("CPF/CNPJ", format_cpf_cnpj(usuario[3])),
-            ("Nascimento", format_date(usuario[4])),
-            ("Ativo", "Sim" if usuario[5] == 1 else "Não")
+            ("Telefone", format_phone(usuario[1])),
+            ("CPF/CNPJ", format_cpf_cnpj(usuario[2])),
+            ("Nascimento", format_date(usuario[3])),
+            ("Ativo", "Sim" if usuario[4] == 1 else "Não")
         ]
 
         for i in range(0, len(campos), 2):
@@ -340,9 +372,9 @@ def criar_pdf_usuarios():
             if i + 1 < len(campos):
                 pdf.set_x(120)
                 pdf.set_font("Arial", "B", 12)
-                pdf.cell(30, 10, f"{campos[i+1][0]}:", border=0)
+                pdf.cell(30, 10, f"{campos[i + 1][0]}:", border=0)
                 pdf.set_font("Arial", "", 12)
-                pdf.cell(35, 10, str(campos[i+1][1]), border=0)
+                pdf.cell(35, 10, str(campos[i + 1][1]), border=0)
             pdf.ln(8)
 
         pdf.ln(5)
@@ -357,5 +389,3 @@ def criar_pdf_usuarios():
     pdf_path = "relatorio_usuarios.pdf"
     pdf.output(pdf_path)
     return send_file(pdf_path, mimetype='application/pdf', as_attachment=False)
-
-# Fim das Rotas
