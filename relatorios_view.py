@@ -1,4 +1,4 @@
-from flask import Flask, send_file
+from flask import Flask, send_file, request
 from main import app, con
 from fpdf import FPDF
 from datetime import datetime
@@ -111,13 +111,36 @@ class CustomUsuarioPDF(FPDF):
 
 @app.route('/relatorio/carros', methods=['GET'])
 def criar_pdf_carro():
+    marca = request.args.get('marca')
+    data_inicial = request.args.get('data_inicial')
+    data_final = request.args.get('data_final')
+
+    query = """SELECT marca, modelo, placa, ano_modelo, ano_fabricacao, cor, renavam, cambio, combustivel, 
+                      categoria, quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, versao 
+               FROM carros WHERE 1=1"""
+    params = []
+
+    if marca:
+        query += " AND UPPER(MARCA) = UPPER(?)"
+        params.append(marca)
+
+    # Filtro por período (usando CRIADO_EM como referência)
+    if data_inicial and data_final:
+        query += " AND CRIADO_EM BETWEEN ? AND ?"
+        params.extend([data_inicial, data_final])
+    elif data_inicial:
+        query += " AND CRIADO_EM >= ?"
+        params.append(data_inicial)
+    elif data_final:
+        query += " AND CRIADO_EM <= ?"
+        params.append(data_final)
+
     cursor = con.cursor()
-    cursor.execute("SELECT marca, modelo, placa, ano_modelo, ano_fabricacao, cor, renavam, cambio, combustivel, categoria, quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, versao FROM carros")
+    cursor.execute(query, params)
     carros = cursor.fetchall()
     cursor.close()
 
     total_veiculos = len(carros)
-
     pdf = CustomCarroPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
@@ -184,8 +207,32 @@ def criar_pdf_carro():
 
 @app.route('/relatorio/motos', methods=['GET'])
 def criar_pdf_moto():
+    marca = request.args.get('marca')
+    data_inicial = request.args.get('data_inicial')
+    data_final = request.args.get('data_final')
+
+    query = """SELECT marca, modelo, placa, ano_modelo, ano_fabricacao, categoria, cor, renavam, 
+                      marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, 
+                      alimentacao, estado, cidade, quilometragem, preco_compra, preco_venda, licenciado 
+               FROM motos WHERE 1=1"""
+    params = []
+
+    if marca:
+        query += " AND UPPER(MARCA) = UPPER(?)"
+        params.append(marca)
+
+    if data_inicial and data_final:
+        query += " AND CRIADO_EM BETWEEN ? AND ?"
+        params.extend([data_inicial, data_final])
+    elif data_inicial:
+        query += " AND CRIADO_EM >= ?"
+        params.append(data_inicial)
+    elif data_final:
+        query += " AND CRIADO_EM <= ?"
+        params.append(data_final)
+
     cursor = con.cursor()
-    cursor.execute("SELECT marca, modelo, placa, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, alimentacao, estado, cidade, quilometragem, preco_compra, preco_venda, licenciado FROM motos")
+    cursor.execute(query, params)
     motos = cursor.fetchall()
     cursor.close()
 
