@@ -22,7 +22,6 @@ def validar_senha(senha):
 
     return True
 
-
 @app.route('/cadastro', methods=['GET'])
 def get_user():
     cursor = con.cursor()
@@ -101,25 +100,11 @@ def update_user(id):
         cursor.close()
         return jsonify({'error': 'Usuário não encontrado'}), 404
 
-    # Verificar se o CPF/CNPJ já existe (se estiver sendo alterado)
-    if cpf_cnpj and (user_data[3] is None or cpf_cnpj != user_data[3]):
-        cursor.execute("SELECT 1 FROM USUARIO WHERE cpf_cnpj = ? AND id_usuario != ?", (cpf_cnpj, id))
-        if cursor.fetchone():
-            cursor.close()
-            return jsonify({'error': 'CPF/CNPJ já cadastrado por outro usuário'}), 400
-
-    # Verificar se o telefone já existe (se estiver sendo alterado)
-    if telefone and (user_data[4] is None or telefone != user_data[4]):
-        cursor.execute("SELECT 1 FROM USUARIO WHERE telefone = ? AND id_usuario != ?", (telefone, id))
-        if cursor.fetchone():
-            cursor.close()
-            return jsonify({'error': 'Telefone já cadastrado por outro usuário'}), 400
+    cursor.execute("SELECT 1 FROM USUARIO WHERE email = ?", (email,))
 
     if email != user_data[5]:
-        cursor.execute("SELECT 1 FROM USUARIO WHERE email = ? AND id_usuario != ?", (email, id))
         if cursor.fetchone():
-            cursor.close()
-            return jsonify({'error': 'Email já cadastrado por outro usuário'}), 400
+            return jsonify({'error': 'Email já cadastrado'}), 404
 
     if user_data[7] is not None:
         ultima_atualizacao = user_data[7]
@@ -264,29 +249,3 @@ def login_user():
         return jsonify({"error": "Número máximo de tentativas de login excedido."}), 401
 
     return jsonify({"error": "Senha incorreta."}), 401
-    
-@app.route('/verificar_dados', methods=['POST'])
-def verificar_dados():
-    data = request.get_json()
-    cpf_cnpj = data.get('cpf_cnpj')
-    telefone = data.get('telefone')
-    id_usuario = data.get('id_usuario')
-    
-    cursor = con.cursor()
-    
-    # Verificar CPF/CNPJ
-    if cpf_cnpj:
-        cursor.execute("SELECT 1 FROM USUARIO WHERE cpf_cnpj = ? AND id_usuario != ?", (cpf_cnpj, id_usuario))
-        if cursor.fetchone():
-            cursor.close()
-            return jsonify({'error': 'CPF/CNPJ já cadastrado por outro usuário'}), 400
-    
-    # Verificar telefone
-    if telefone:
-        cursor.execute("SELECT 1 FROM USUARIO WHERE telefone = ? AND id_usuario != ?", (telefone, id_usuario))
-        if cursor.fetchone():
-            cursor.close()
-            return jsonify({'error': 'Telefone já cadastrado por outro usuário'}), 400
-    
-    cursor.close()
-    return jsonify({'success': 'Dados disponíveis para cadastro'}), 200
