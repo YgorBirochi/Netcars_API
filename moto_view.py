@@ -81,8 +81,6 @@ def upload_img_moto(id):
             'error': 'Dados incompletos',
             'missing_fields': 'Imagens'
         }), 400
-
-    # CORREÇÃO: Altere o comentário para indicar que a pasta destino usa o id da MOTOS e não do carro.
     pasta_destino = os.path.join(upload_folder, "Motos", str(id))
     os.makedirs(pasta_destino, exist_ok=True)
 
