@@ -303,8 +303,54 @@ def criar_pdf_moto():
 
 @app.route('/relatorio/usuarios', methods=['GET'])
 def criar_pdf_usuarios():
+    # Obtendo parâmetros de filtro via query string
+    nome = request.args.get('nome')
+    cpf_cnpj = request.args.get('cpf_cnpj')
+    dia = request.args.get('dia')
+    mes = request.args.get('mes')
+    ano = request.args.get('ano')
+    ativo = request.args.get('ativo')
+
+    query = """
+        SELECT 
+            nome_completo, 
+            cpf_cnpj,
+            data_nascimento,
+            ativo
+        FROM usuario
+        WHERE 1=1
+    """
+    params = []
+
+    # Filtro por nome (busca parcial)
+    if nome:
+        query += " AND UPPER(nome_completo) LIKE ?"
+        params.append('%' + nome.upper() + '%')
+
+    # Filtro por CPF/CNPJ (aqui estamos usando LIKE para busca parcial)
+    if cpf_cnpj:
+        query += " AND UPPER(cpf_cnpj) LIKE ?"
+        params.append('%' + cpf_cnpj.upper() + '%')
+
+    # Filtro por dia, mês e ano (usando EXTRACT)
+    # Se algum desses parâmetros não for informado, não filtra por ele.
+    if dia:
+        query += " AND EXTRACT(DAY FROM data_nascimento) = ?"
+        params.append(int(dia))
+    if mes:
+        query += " AND EXTRACT(MONTH FROM data_nascimento) = ?"
+        params.append(int(mes))
+    if ano:
+        query += " AND EXTRACT(YEAR FROM data_nascimento) = ?"
+        params.append(int(ano))
+
+    # Filtro por status (ativo)
+    if ativo is not None:
+        query += " AND ativo = ?"
+        params.append(int(ativo))
+    print(query)
     cursor = con.cursor()
-    cursor.execute("SELECT nome_completo, email, telefone, cpf_cnpj, data_nascimento, ativo FROM usuario")
+    cursor.execute(query, params)
     usuarios = cursor.fetchall()
     cursor.close()
 
@@ -324,25 +370,24 @@ def criar_pdf_usuarios():
 
         campos = [
             ("Nome", usuario[0]),
-            ("Email", usuario[1]),
-            ("Telefone", format_phone(usuario[2])),
-            ("CPF/CNPJ", format_cpf_cnpj(usuario[3])),
-            ("Nascimento", format_date(usuario[4])),
-            ("Ativo", "Sim" if usuario[5] == 1 else "Não")
+            ("CPF/CNPJ", format_cpf_cnpj(usuario[1])),
+            ("Nascimento", format_date(usuario[2])),
+            ("Ativo", "Sim" if usuario[3] == 1 else "Não")
         ]
 
+        # Exibindo 2 campos por linha
         for i in range(0, len(campos), 2):
             pdf.set_font("Arial", "B", 12)
             pdf.cell(30, 10, f"{campos[i][0]}:", border=0)
             pdf.set_font("Arial", "", 12)
-            pdf.cell(35, 10, str(campos[i][1]), border=0)
+            pdf.cell(65, 10, str(campos[i][1]), border=0)
 
             if i + 1 < len(campos):
                 pdf.set_x(120)
                 pdf.set_font("Arial", "B", 12)
                 pdf.cell(30, 10, f"{campos[i+1][0]}:", border=0)
                 pdf.set_font("Arial", "", 12)
-                pdf.cell(35, 10, str(campos[i+1][1]), border=0)
+                pdf.cell(65, 10, str(campos[i+1][1]), border=0)
             pdf.ln(8)
 
         pdf.ln(5)
@@ -357,5 +402,6 @@ def criar_pdf_usuarios():
     pdf_path = "relatorio_usuarios.pdf"
     pdf.output(pdf_path)
     return send_file(pdf_path, mimetype='application/pdf', as_attachment=False)
+
 
 # Fim das Rotas
