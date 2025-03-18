@@ -83,7 +83,7 @@ def upload_img_moto(id):
             'missing_fields': 'Imagens'
         }), 400
 
-    # Define a pasta destino usando o id do carro
+    # Define a pasta destino usando o id da moto
     pasta_destino = os.path.join(upload_folder, "Motos", str(id))
     os.makedirs(pasta_destino, exist_ok=True)
 
