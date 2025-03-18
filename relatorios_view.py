@@ -301,19 +301,23 @@ def criar_pdf_moto():
     pdf.output(pdf_path)
     return send_file(pdf_path, mimetype='application/pdf', as_attachment=False)
 
+
 @app.route('/relatorio/usuarios', methods=['GET'])
 def criar_pdf_usuarios():
     # Obtendo parâmetros de filtro via query string
-    nome = request.args.get('nome')
-    cpf_cnpj = request.args.get('cpf_cnpj')
-    dia = request.args.get('dia')
-    mes = request.args.get('mes')
-    ano = request.args.get('ano')
-    ativo = request.args.get('ativo')
+    nome = request.args.get('nome', '').strip()
+    cpf_cnpj = request.args.get('cpf_cnpj', '').strip()
+    dia = request.args.get('dia', '').strip()
+    mes = request.args.get('mes', '').strip()
+    ano = request.args.get('ano', '').strip()
+    ativo = request.args.get('ativo', '').strip()
 
+    # Monta a query com todos os campos, mas adiciona os filtros se forem informados
     query = """
         SELECT 
-            nome_completo, 
+            nome_completo,
+            email,
+            telefone,
             cpf_cnpj,
             data_nascimento,
             ativo
@@ -322,18 +326,17 @@ def criar_pdf_usuarios():
     """
     params = []
 
-    # Filtro por nome (busca parcial)
+    # Filtro por nome (busca parcial, sem distinção de caixa)
     if nome:
         query += " AND UPPER(nome_completo) LIKE ?"
         params.append('%' + nome.upper() + '%')
 
-    # Filtro por CPF/CNPJ (aqui estamos usando LIKE para busca parcial)
+    # Filtro por CPF/CNPJ (busca parcial)
     if cpf_cnpj:
         query += " AND UPPER(cpf_cnpj) LIKE ?"
         params.append('%' + cpf_cnpj.upper() + '%')
 
-    # Filtro por dia, mês e ano (usando EXTRACT)
-    # Se algum desses parâmetros não for informado, não filtra por ele.
+    # Filtro por data de nascimento usando EXTRACT para dia, mês e ano
     if dia:
         query += " AND EXTRACT(DAY FROM data_nascimento) = ?"
         params.append(int(dia))
@@ -345,7 +348,7 @@ def criar_pdf_usuarios():
         params.append(int(ano))
 
     # Filtro por status (ativo)
-    if ativo is not None:
+    if ativo:
         query += " AND ativo = ?"
         params.append(int(ativo))
 
@@ -368,32 +371,36 @@ def criar_pdf_usuarios():
             pdf.add_page()
             contador = 0
 
+        # Campos retornados pelo SELECT:
+        # 0: nome_completo, 1: email, 2: telefone, 3: cpf_cnpj, 4: data_nascimento, 5: ativo
         campos = [
             ("Nome", usuario[0]),
-            ("CPF/CNPJ", format_cpf_cnpj(usuario[1])),
-            ("Nascimento", format_date(usuario[2])),
-            ("Ativo", "Sim" if usuario[3] == 1 else "Não")
+            ("Email", usuario[1]),
+            ("Telefone", format_phone(usuario[2])),
+            ("CPF/CNPJ", format_cpf_cnpj(usuario[3])),
+            ("Nascimento", format_date(usuario[4])),
+            ("Ativo", "Sim" if usuario[5] == 1 else "Não")
         ]
 
-        # Exibindo 2 campos por linha
+        # Exibe os campos com os labels próximos dos valores
         for i in range(0, len(campos), 2):
             pdf.set_font("Arial", "B", 12)
             pdf.cell(30, 10, f"{campos[i][0]}:", border=0)
             pdf.set_font("Arial", "", 12)
-            pdf.cell(65, 10, str(campos[i][1]), border=0)
+            pdf.cell(45, 10, str(campos[i][1]), border=0)
 
             if i + 1 < len(campos):
-                pdf.set_x(120)
+                # Ajusta o offset para aproximar os dados dos labels
+                pdf.set_x(pdf.get_x() + 10)
                 pdf.set_font("Arial", "B", 12)
-                pdf.cell(30, 10, f"{campos[i+1][0]}:", border=0)
+                pdf.cell(30, 10, f"{campos[i + 1][0]}:", border=0)
                 pdf.set_font("Arial", "", 12)
-                pdf.cell(65, 10, str(campos[i+1][1]), border=0)
+                pdf.cell(45, 10, str(campos[i + 1][1]), border=0)
             pdf.ln(8)
 
         pdf.ln(5)
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
         pdf.ln(5)
-
         contador += 1
 
     pdf.set_font("Arial", "B", 14)
