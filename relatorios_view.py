@@ -348,7 +348,7 @@ def criar_pdf_usuarios():
     if ativo is not None:
         query += " AND ativo = ?"
         params.append(int(ativo))
-    print(query)
+
     cursor = con.cursor()
     cursor.execute(query, params)
     usuarios = cursor.fetchall()
@@ -402,6 +402,5 @@ def criar_pdf_usuarios():
     pdf_path = "relatorio_usuarios.pdf"
     pdf.output(pdf_path)
     return send_file(pdf_path, mimetype='application/pdf', as_attachment=False)
-
 
 # Fim das Rotas
