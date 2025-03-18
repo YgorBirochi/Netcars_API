@@ -90,33 +90,34 @@ def update_user(id):
     email = data.get('email')
     senha_hash = data.get('senha_hash')
     senha_nova = data.get('senha_nova')
+    tipo_user = data.get('tipo_usuario')
 
     cursor = con.cursor()
 
-    cursor.execute("SELECT ID_USUARIO FROM USUARIO WHERE CPF_CNPJ = ?", (cpf_cnpj,))
+    cursor.execute("SELECT ID_USUARIO FROM USUARIO WHERE CPF_CNPJ = ? AND ID_USUARIO != ?", (cpf_cnpj, id))
     if cursor.fetchone():
         return jsonify({
-            'error': 'CPF/CNPJ já cadastrado'
-        })
+            'error': 'CPF/CNPJ já cadastrado.'
+        }), 401
 
-    cursor.execute("SELECT ID_USUARIO FROM USUARIO WHERE telefone = ?", (telefone,))
+    cursor.execute("SELECT ID_USUARIO FROM USUARIO WHERE telefone = ? AND ID_USUARIO != ?", (telefone, id))
     if cursor.fetchone():
         return jsonify({
-            'error': 'Telefone já cadastrado'
-        })
+            'error': 'Telefone já cadastrado.'
+        }), 401
 
     cursor.execute("SELECT ID_USUARIO, NOME_COMPLETO, DATA_NASCIMENTO, CPF_CNPJ, TELEFONE, EMAIL, SENHA_HASH, ATUALIZADO_EM FROM USUARIO WHERE id_usuario = ?", (id,))
     user_data = cursor.fetchone()
 
     if not user_data:
         cursor.close()
-        return jsonify({'error': 'Usuário não encontrado'}), 404
+        return jsonify({'error': 'Usuário não encontrado.'}), 404
 
     cursor.execute("SELECT 1 FROM USUARIO WHERE email = ?", (email,))
 
     if email != user_data[5]:
         if cursor.fetchone():
-            return jsonify({'error': 'Email já cadastrado'}), 404
+            return jsonify({'error': 'Email já cadastrado.'}), 404
 
     if user_data[7] is not None:
         ultima_atualizacao = user_data[7]
@@ -127,9 +128,16 @@ def update_user(id):
             }), 403
 
     data_att = datetime.now()
+
     if not senha_nova and not senha_hash:
-        cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, ATUALIZADO_EM = ? WHERE id_usuario = ?",
-            (nome_completo, data_nascimento, cpf_cnpj, telefone, email, data_att, id))
+        if tipo_user == 1:
+            cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ? WHERE id_usuario = ?",
+                (nome_completo, data_nascimento, cpf_cnpj, telefone, email, id))
+        else:
+            cursor.execute(
+                "UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, ATUALIZADO_EM = ? WHERE id_usuario = ?",
+                (nome_completo, data_nascimento, cpf_cnpj, telefone, email, data_att, id))
+
         con.commit()
         cursor.close()
         return jsonify({
@@ -144,18 +152,29 @@ def update_user(id):
         })
 
     if not senha_nova and senha_hash:
-        return jsonify({"error": "Digite uma nova senha para atualizá-la."}), 401
+        return jsonify({"error": "Informe uma nova senha para atualizá-la."}), 401
+
+    if senha_nova and not senha_hash:
+        return jsonify({"error": "Informe a senha atual para atualizá-la."}), 401
 
     if check_password_hash(user_data[6], senha_hash):
+        if senha_hash == senha_nova:
+            return jsonify({"error": "A senha nova não pode ser igual a senha antiga."}), 401
         senha_check = validar_senha(senha_nova)
         if senha_check is not True:
-            return jsonify({'error': senha_check}), 404
+            return jsonify({"error": senha_check}), 404
         senha_enviada = generate_password_hash(senha_nova).decode('utf-8')
     else:
         return jsonify({"error": "Senha atual incorreta."}), 401
 
-    cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ?, ATUALIZADO_EM = ? WHERE id_usuario = ?",
-                   (nome_completo, data_nascimento, cpf_cnpj, telefone, email, senha_enviada, data_att, id))
+    if tipo_user == 1:
+        cursor.execute(
+            "UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ? WHERE id_usuario = ?",
+            (nome_completo, data_nascimento, cpf_cnpj, telefone, email, senha_enviada, id))
+    else:
+        cursor.execute(
+            "UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ?, ATUALIZADO_EM = ? WHERE id_usuario = ?",
+            (nome_completo, data_nascimento, cpf_cnpj, telefone, email, senha_enviada, data_att, id))
 
     con.commit()
     cursor.close()

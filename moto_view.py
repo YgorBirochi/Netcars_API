@@ -16,7 +16,7 @@ def get_moto():
     cursor = con.cursor()
 
     cursor.execute('''
-    SELECT marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, tipo_motor, 
+    SELECT id_moto, marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, tipo_motor, 
         cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
         preco_compra, preco_venda, placa, alimentacao, criado_em, ativo FROM MOTOS
     ''')
@@ -59,7 +59,6 @@ def get_moto():
         'veiculos': lista_motos
     }), 200
 
-
 @app.route('/moto/upload_img/<int:id>', methods=['POST'])
 def upload_img_moto(id):
     token = request.headers.get('Authorization')
@@ -83,7 +82,7 @@ def upload_img_moto(id):
             'missing_fields': 'Imagens'
         }), 400
 
-    # Define a pasta destino usando o id do carro
+    # CORREÇÃO: Altere o comentário para indicar que a pasta destino usa o id da MOTOS e não do carro.
     pasta_destino = os.path.join(upload_folder, "Motos", str(id))
     os.makedirs(pasta_destino, exist_ok=True)
 
@@ -103,29 +102,16 @@ def upload_img_moto(id):
 def add_moto():
     token = request.headers.get('Authorization')
     if not token:
-        return jsonify({'mensagem': 'Token de autenticação necessário'}), 401
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
 
     token = remover_bearer(token)
     try:
         payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
         id_usuario = payload['id_usuario']
     except jwt.ExpiredSignatureError:
-        return jsonify({'mensagem': 'Token expirado'}), 401
+        return jsonify({'error': 'Token expirado'}), 401
     except jwt.InvalidTokenError:
-        return jsonify({'mensagem': 'Token inválido'}), 401
-
-    token = request.headers.get('Authorization')
-    if not token:
-        return jsonify({'error': 'Token de autenticação necessário.'}), 401
-
-    token = remover_bearer(token)
-    try:
-        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
-        id_usuario = payload['id_usuario']
-    except jwt.ExpiredSignatureError:
-        return jsonify({'error': 'Token expirado.'}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({'error': 'Token inválido.'}), 401
+        return jsonify({'error': 'Token inválido'}), 401
 
     data = request.get_json()
 
@@ -139,7 +125,6 @@ def add_moto():
     ]
 
     missing_fields = [field for field in required_fields if not data.get(field)]
-
     if missing_fields:
         return jsonify({
             'error': 'Dados incompletos',
@@ -164,6 +149,7 @@ def add_moto():
     quilometragem = data.get('quilometragem')
     preco_compra = data.get('preco_compra')
     preco_venda = data.get('preco_venda')
+    # CORREÇÃO: Garantir que a placa seja convertida para maiúsculas
     placa = data.get('placa').upper()
     alimentacao = data.get('alimentacao')
     licenciado = data.get('licenciado')
@@ -182,12 +168,11 @@ def add_moto():
     VALUES
     (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ID_MOTO
     ''', (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida,
-    tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem,
-    preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado))
+         tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem,
+         preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado))
 
     id_moto = cursor.fetchone()[0]
     con.commit()
-
     cursor.close()
 
     return jsonify({
@@ -300,7 +285,7 @@ def editar_moto(id):
     cursor.execute('''
         UPDATE MOTOS
         SET marca =?, modelo =?, ano_modelo =?, ano_fabricacao =?, categoria =?, cor =?, renavam = ?, marchas =?, partida =?, 
-        tipo_motor =?, cilindrada=?, freio_dianteiro_traseiro =?, refrigeracao, =?, estado =?, cidade =?,  quilometragem =?, 
+        tipo_motor =?, cilindrada=?, freio_dianteiro_traseiro =?, refrigeracao =?, estado =?, cidade =?,  quilometragem =?, 
         preco_compra =?, preco_venda =?, placa =?, criado_em = ?, ativo =?, alimentacao =?, licenciado =?
         where ID_MOTO = ?
         ''',

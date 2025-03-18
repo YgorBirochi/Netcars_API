@@ -59,16 +59,16 @@ def get_carro():
 def upload_img(id):
     token = request.headers.get('Authorization')
     if not token:
-        return jsonify({'mensagem': 'Token de autenticação necessário'}), 401
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
 
     token = remover_bearer(token)
     try:
         payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
         id_usuario = payload['id_usuario']
     except jwt.ExpiredSignatureError:
-        return jsonify({'mensagem': 'Token expirado'}), 401
+        return jsonify({'error': 'Token expirado'}), 401
     except jwt.InvalidTokenError:
-        return jsonify({'mensagem': 'Token inválido'}), 401
+        return jsonify({'error': 'Token inválido'}), 401
 
     imagens = request.files.getlist('imagens')
 
