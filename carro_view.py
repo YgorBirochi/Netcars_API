@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory, url_for
 from main import app, con, upload_folder, senha_secreta
 from datetime import datetime
 import pytz
@@ -11,7 +11,12 @@ def remover_bearer(token):
     else:
         return token
 
-@app.route('/carro', methods=['GET'])
+@app.route('/uploads/carros/<int:id_carro>/<filename>')
+def get_car_image(id_carro, filename):
+    return send_from_directory(os.path.join(app.root_path, 'upload', 'Carros', str(id_carro)), filename)
+
+
+@app.route('/buscar-carro', methods=['POST'])
 def get_carro():
     cursor = con.cursor()
 
@@ -25,6 +30,21 @@ def get_carro():
     lista_carros = []
 
     for carro in list(fetch):
+        id_carro = carro[0]
+
+        # Define o caminho para a pasta de imagens do carro (ex: uploads/carros/<id_carro>)
+        images_dir = os.path.join(app.root_path, upload_folder, 'Carros', str(id_carro))
+        imagens = []
+
+        # Verifica se o diretório existe
+        if os.path.exists(images_dir):
+            for file in os.listdir(images_dir):
+                if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                    # Cria uma URL para a imagem.
+                    # Supondo que a pasta 'uploads' esteja configurada para ser servida de forma estática.
+                    imagem_url = url_for('get_car_image', id_carro=id_carro, filename=file, _external=True)
+                    imagens.append(imagem_url)
+
         lista_carros.append({
             'id_carro': carro[0],
             'marca': carro[1],
@@ -45,13 +65,15 @@ def get_carro():
             'licenciado': carro[16],
             'placa': carro[17],
             'criado_em': carro[18],
-            'ativo': carro[19]
+            'ativo': carro[19],
+            'imagens': imagens  # Lista de URLs das imagens
         })
 
     qnt_carros = len(lista_carros)
 
     return jsonify({
         'success': f'{qnt_carros} carro(s) encontrado(s).',
+        'qnt': qnt_carros,
         'veiculos': lista_carros
     }), 200
 
