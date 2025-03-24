@@ -14,25 +14,93 @@ def remover_bearer(token):
 @app.route('/uploads/carros/<int:id_carro>/<filename>')
 def get_car_image(id_carro, filename):
     return send_from_directory(os.path.join(app.root_path, 'upload', 'Carros', str(id_carro)), filename)
-
-
 @app.route('/buscar-carro', methods=['POST'])
 def get_carro():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    data = request.get_json()
+
+    idFiltro = data.get('id')
+    anoMaxFiltro = data.get('ano-max')
+    anoMinFiltro = data.get('ano-min')
+    categoriaFiltro = data.get('categoria')
+    cidadeFiltro = data.get('cidade')
+    estadoFiltro = data.get('estado')
+    marcaFiltro = data.get('marca')
+    precoMax = data.get('preco-max')
+    precoMinFiltro = data.get('preco-min')
+    coresFiltro = data.get('cores')  # Pode ser uma lista ou string
+
+    # Query base
+    query = '''
+        SELECT id_carro, marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria, 
+               quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo 
+        FROM CARROS
+    '''
+    conditions = []
+    params = []
+
+    # Adiciona as condições de acordo com os filtros informados
+    if idFiltro:
+        conditions.append("id_carro = ?")
+        params.append(idFiltro)
+    if anoMaxFiltro:
+        conditions.append("ano_modelo <= ?")
+        params.append(anoMaxFiltro)
+    if anoMinFiltro:
+        conditions.append("ano_modelo >= ?")
+        params.append(anoMinFiltro)
+    if categoriaFiltro:
+        conditions.append("categoria = ?")
+        params.append(categoriaFiltro)
+    if cidadeFiltro:
+        conditions.append("cidade = ?")
+        params.append(cidadeFiltro)
+    if estadoFiltro:
+        conditions.append("estado = ?")
+        params.append(estadoFiltro)
+    if marcaFiltro:
+        conditions.append("marca = ?")
+        params.append(marcaFiltro)
+    if precoMax:
+        conditions.append("preco_venda <= ?")
+        params.append(precoMax)
+    if precoMinFiltro:
+        conditions.append("preco_venda >= ?")
+        params.append(precoMinFiltro)
+    if coresFiltro:
+        # Se coresFiltro for uma lista, usamos IN; caso contrário, comparamos com igualdade
+        if isinstance(coresFiltro, list):
+            placeholders = ','.join('?' * len(coresFiltro))
+            conditions.append(f"cor IN ({placeholders})")
+            params.extend(coresFiltro)
+        else:
+            conditions.append("cor = ?")
+            params.append(coresFiltro)
+
+    # Se houver condições, concatena à query base
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
     cursor = con.cursor()
-
-    cursor.execute('''
-    SELECT id_carro, marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria, 
-    quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo FROM CARROS
-    ''')
-
+    cursor.execute(query, params)
     fetch = cursor.fetchall()
 
     lista_carros = []
-
     for carro in list(fetch):
         id_carro = carro[0]
-
-        # Define o caminho para a pasta de imagens do carro (ex: uploads/carros/<id_carro>)
+        # Define o caminho para a pasta de imagens do carro (ex: uploads/Carros/<id_carro>)
         images_dir = os.path.join(app.root_path, upload_folder, 'Carros', str(id_carro))
         imagens = []
 
@@ -40,13 +108,11 @@ def get_carro():
         if os.path.exists(images_dir):
             for file in os.listdir(images_dir):
                 if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                    # Cria uma URL para a imagem.
-                    # Supondo que a pasta 'uploads' esteja configurada para ser servida de forma estática.
                     imagem_url = url_for('get_car_image', id_carro=id_carro, filename=file, _external=True)
                     imagens.append(imagem_url)
 
         lista_carros.append({
-            'id_carro': carro[0],
+            'id': carro[0],
             'marca': carro[1],
             'modelo': carro[2],
             'ano_modelo': carro[3],
@@ -66,7 +132,7 @@ def get_carro():
             'placa': carro[17],
             'criado_em': carro[18],
             'ativo': carro[19],
-            'imagens': imagens  # Lista de URLs das imagens
+            'imagens': imagens
         })
 
     qnt_carros = len(lista_carros)
@@ -145,8 +211,7 @@ def add_carro():
 
     if missing_fields:
         return jsonify({
-            'error': 'Dados incompletos',
-            'missing_fields': missing_fields
+            'error': f'Dados faltando: {missing_fields}'
         }), 400
 
     marca = data.get('marca')
@@ -172,6 +237,20 @@ def add_carro():
     criado_em = datetime.now(pytz.timezone('America/Sao_Paulo'))
 
     cursor = con.cursor()
+
+    # Retornar caso já exista placa cadastrada
+    cursor.execute("SELECT 1 FROM CARROS WHERE PLACA = ?", (placa,))
+    if cursor.fetchone():
+        return jsonify({
+            'error': 'Placa do veículo já cadastrada.'
+        }), 409
+
+    # Retornar caso já exista RENAVAM cadastrado
+    cursor.execute("SELECT 1 FROM CARROS WHERE RENAVAM = ?", (renavam,))
+    if cursor.fetchone():
+        return jsonify({
+            'error': 'Documento do veículo já cadastrada.'
+        }), 409
 
     cursor.execute('''
         INSERT INTO CARROS

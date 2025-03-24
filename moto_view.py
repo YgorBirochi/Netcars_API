@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, url_for, send_from_directory
 from main import app, con, upload_folder, senha_secreta
 from datetime import datetime
 import pytz
@@ -11,23 +11,42 @@ def remover_bearer(token):
     else:
         return token
 
-@app.route('/moto', methods=['GET'])
+# Rota para servir as imagens de motos com o parâmetro correto
+@app.route('/uploads/motos/<int:id_moto>/<filename>')
+def get_moto_image(id_moto, filename):
+    return send_from_directory(os.path.join(app.root_path, upload_folder, 'Motos', str(id_moto)), filename)
+
+@app.route('/buscar-moto', methods=['POST'])
 def get_moto():
     cursor = con.cursor()
 
     cursor.execute('''
-    SELECT id_moto, marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, tipo_motor, 
-        cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
-        preco_compra, preco_venda, placa, alimentacao, criado_em, ativo FROM MOTOS
+        SELECT id_moto, marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, 
+               tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
+               preco_compra, preco_venda, placa, alimentacao, criado_em, ativo 
+        FROM MOTOS
     ''')
 
     fetch = cursor.fetchall()
-
     lista_motos = []
 
-    for moto in fetch:
+    for moto in list(fetch):
+        id_moto = moto[0]
+
+        # Define o caminho para a pasta de imagens da moto (ex: uploads/motos/<id_moto>)
+        images_dir = os.path.join(app.root_path, upload_folder, 'Motos', str(id_moto))
+        imagens = []
+
+        # Verifica se o diretório existe
+        if os.path.exists(images_dir):
+            for file in os.listdir(images_dir):
+                if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                    # Cria uma URL para a imagem.
+                    imagem_url = url_for('get_moto_image', id_moto=id_moto, filename=file, _external=True)
+                    imagens.append(imagem_url)
+
         lista_motos.append({
-            'id_moto': moto[0],
+            'id': moto[0],
             'marca': moto[1],
             'modelo': moto[2],
             'ano_modelo': moto[3],
@@ -49,13 +68,15 @@ def get_moto():
             'placa': moto[19],
             'alimentacao': moto[20],
             'criado_em': moto[21],
-            'ativo': moto[22]
+            'ativo': moto[22],
+            'imagens': imagens  # Inclusão da lista de imagens
         })
 
     qnt_motos = len(lista_motos)
 
     return jsonify({
         'success': f'{qnt_motos} moto(s) encontrada(s).',
+        'qnt': qnt_motos,
         'veiculos': lista_motos
     }), 200
 
@@ -125,8 +146,7 @@ def add_moto():
     missing_fields = [field for field in required_fields if not data.get(field)]
     if missing_fields:
         return jsonify({
-            'error': 'Dados incompletos',
-            'missing_fields': missing_fields
+            'error': f'Dados faltando: {missing_fields}'
         }), 400
 
     marca = data.get('marca')
@@ -147,7 +167,6 @@ def add_moto():
     quilometragem = data.get('quilometragem')
     preco_compra = data.get('preco_compra')
     preco_venda = data.get('preco_venda')
-    # CORREÇÃO: Garantir que a placa seja convertida para maiúsculas
     placa = data.get('placa').upper()
     alimentacao = data.get('alimentacao')
     licenciado = data.get('licenciado')
@@ -157,6 +176,20 @@ def add_moto():
     criado_em = datetime.now(pytz.timezone('America/Sao_Paulo'))
 
     cursor = con.cursor()
+
+    # Retornar caso já exista placa cadastrada
+    cursor.execute("SELECT 1 FROM MOTOS WHERE PLACA = ?", (placa,))
+    if cursor.fetchone():
+        return jsonify({
+            'error': 'Placa do veículo já cadastrada.'
+        }), 409
+
+    # Retornar caso já exista RENAVAM cadastrado
+    cursor.execute("SELECT 1 FROM MOTOS WHERE RENAVAM = ?", (renavam,))
+    if cursor.fetchone():
+        return jsonify({
+            'error': 'Documento do veículo já cadastrada.'
+        }), 409
 
     cursor.execute('''
     INSERT INTO MOTOS
