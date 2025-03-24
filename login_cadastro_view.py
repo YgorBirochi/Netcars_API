@@ -26,7 +26,7 @@ def validar_senha(senha):
 def get_user():
     cursor = con.cursor()
 
-    cursor.execute('SELECT ID_USUARIO, NOME_COMPLETO, EMAIL, SENHA_HASH FROM USUARIO')
+    cursor.execute('SELECT ID_USUARIO, NOME_COMPLETO, EMAIL, SENHA_HASH, TELEFONE, ATIVO, TIPO_USUARIO FROM USUARIO')
 
     resultado = cursor.fetchall()
 
