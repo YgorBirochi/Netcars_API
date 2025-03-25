@@ -154,6 +154,7 @@ def update_user_simples():
     cursor = con.cursor()
     cursor.execute("SELECT 1 FROM USUARIO WHERE TELEFONE = ? AND TELEFONE != '' AND ID_USUARIO != ?", (telefone, id_usuario))
     if cursor.fetchone():
+        cursor.close()
         return jsonify({
             'error': 'Telefone já cadastrado.'
         }), 400
@@ -162,6 +163,7 @@ def update_user_simples():
         "SELECT 1 FROM USUARIO WHERE email = ? AND ID_USUARIO != ?",
         (email, id_usuario))
     if cursor.fetchone():
+        cursor.close()
         return jsonify({
             'error': 'Email já cadastrado.'
         }), 400
@@ -195,18 +197,21 @@ def update_user(id):
 
     cursor.execute("SELECT ID_USUARIO FROM USUARIO WHERE CPF_CNPJ = ? AND ID_USUARIO != ?", (cpf_cnpj, id))
     if cursor.fetchone():
+        cursor.close()
         return jsonify({
             'error': 'CPF/CNPJ já cadastrado.'
         }), 401
 
     cursor.execute("SELECT ID_USUARIO FROM USUARIO WHERE telefone = ? AND ID_USUARIO != ?", (telefone, id))
     if cursor.fetchone():
+        cursor.close()
         return jsonify({
             'error': 'Telefone já cadastrado.'
         }), 401
 
     cursor.execute("SELECT 1 FROM USUARIO WHERE email = ? AND ID_USUARIO != ?", (email, id))
     if cursor.fetchone():
+        cursor.close()
         return jsonify({
             'error': 'Email já cadastrado.'
         }), 400
@@ -251,19 +256,24 @@ def update_user(id):
         })
 
     if not senha_nova and senha_hash:
+        cursor.close()
         return jsonify({"error": "Informe uma nova senha para atualizá-la."}), 401
 
     if senha_nova and not senha_hash:
+        cursor.close()
         return jsonify({"error": "Informe a senha atual para atualizá-la."}), 401
 
     if check_password_hash(user_data[6], senha_hash):
         if senha_hash == senha_nova:
+            cursor.close()
             return jsonify({"error": "A senha nova não pode ser igual a senha antiga."}), 401
         senha_check = validar_senha(senha_nova)
         if senha_check is not True:
+            cursor.close()
             return jsonify({"error": senha_check}), 404
         senha_enviada = generate_password_hash(senha_nova).decode('utf-8')
     else:
+        cursor.close()
         return jsonify({"error": "Senha atual incorreta."}), 401
 
     if tipo_user == 1:
