@@ -313,7 +313,7 @@ def criar_pdf_usuarios():
 
     if ativo.lower() == "ativo":
         ativo = 1
-    else:
+    elif ativo.lower() == "inativo":
         ativo = 0
 
     # Monta a query com todos os campos, mas adiciona os filtros se forem informados
