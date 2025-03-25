@@ -118,12 +118,15 @@ def create_user():
 
     senha_hash = generate_password_hash(senha).decode('utf-8')
 
-    cursor.execute("INSERT INTO USUARIO (nome_completo, email, senha_hash, ativo, tipo_usuario) VALUES (?, ?, ?, 1, ?)", (nome, email, senha_hash, tipo_usuario))
+    cursor.execute("INSERT INTO USUARIO (nome_completo, email, senha_hash, ativo, tipo_usuario) VALUES (?, ?, ?, 1, ?) RETURNING ID_USUARIO", (nome, email, senha_hash, tipo_usuario))
+
+    id_usuario = cursor.fetchone()[0]
+
     con.commit()
 
-    cursor.execute('SELECT ID_USUARIO FROM USUARIO WHERE EMAIL = ?', (email,))
-    id = cursor.fetchone()[0]
     cursor.close()
+
+    token = generate_token(id_usuario)
 
     return jsonify({
         'success': "Email cadastrado com sucesso!",
@@ -131,7 +134,8 @@ def create_user():
             'nome_completo': nome,
             'email': email,
             'id_usuario': id,
-            'tipo_usuario': tipo_usuario
+            'tipo_usuario': tipo_usuario,
+            'token': token
         }
     })
 
