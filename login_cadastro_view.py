@@ -45,6 +45,59 @@ def get_user():
 
     return jsonify({'usuarios': user_dic}), 200
 
+@app.route('/get_user_filtro', methods=['POST'])
+def get_user_filtro():
+    data = request.get_json()
+
+    nomeLike = data.get('nome-like')
+    ativo = data.get('ativo')
+    tipo_usuario = data.get('tipo_usuario')
+
+    query = '''
+        SELECT ID_USUARIO, NOME_COMPLETO, EMAIL, TELEFONE, ATIVO, TIPO_USUARIO 
+        FROM USUARIO
+    '''
+    conditions = []
+    parameters = []
+
+    # Se for informado um nome/email, adiciona a condição com o LIKE
+    if nomeLike:
+        conditions.append('(NOME_COMPLETO LIKE ? OR EMAIL LIKE ?)')
+        nomeLike = f"%{nomeLike}%"
+        parameters.extend([nomeLike, nomeLike])
+
+    # Se o filtro "ativo" for informado
+    if ativo is not None and ativo != '':
+        conditions.append('ATIVO = ?')
+        parameters.append(ativo)
+
+    # Se o filtro "tipo_usuario" for informado
+    if tipo_usuario is not None and tipo_usuario != '':
+        conditions.append('TIPO_USUARIO = ?')
+        parameters.append(tipo_usuario)
+
+    # Se houver condições, junta-as na query
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    cursor = con.cursor()
+    cursor.execute(query, tuple(parameters))
+    resultado = cursor.fetchall()
+
+    user_dic = []
+    for user in resultado:
+        user_dic.append({
+            'id_usuario': user[0],
+            'nome_completo': user[1],
+            'email': user[2],
+            'telefone': user[3],
+            'ativo': user[4],
+            'tipo_usuario': user[5]
+        })
+
+    cursor.close()
+    return jsonify({'usuarios': user_dic}), 200
+
 @app.route('/cadastro', methods=['POST'])
 def create_user():
     data = request.get_json()
@@ -82,6 +135,51 @@ def create_user():
         }
     })
 
+@app.route('/update_user', methods=['PUT'])
+def update_user_simples():
+    data = request.get_json()
+
+    id_usuario = data.get('id_usuario')
+    nome_completo = data.get('nome_completo')
+    telefone = data.get('telefone')
+    email = data.get('email')
+    tipo_user = data.get('tipo_usuario')
+    ativo = data.get('ativo')
+
+    if nome_completo is None or email is None or tipo_user is None or ativo is None or id_usuario is None:
+        return jsonify({
+            'error': 'Dados incompletos.'
+        }), 400
+
+    cursor = con.cursor()
+    cursor.execute("SELECT 1 FROM USUARIO WHERE TELEFONE = ? AND TELEFONE != '' AND ID_USUARIO != ?", (telefone, id_usuario))
+    if cursor.fetchone():
+        return jsonify({
+            'error': 'Telefone já cadastrado.'
+        }), 400
+
+    cursor.execute(
+        "SELECT 1 FROM USUARIO WHERE email = ? AND ID_USUARIO != ?",
+        (email, id_usuario))
+    if cursor.fetchone():
+        return jsonify({
+            'error': 'Email já cadastrado.'
+        }), 400
+
+    if not telefone:
+        cursor.execute('''
+               UPDATE USUARIO SET NOME_COMPLETO =?, EMAIL =?, TIPO_USUARIO =?, ATIVO =? WHERE ID_USUARIO =?
+           ''', (nome_completo, email, tipo_user, ativo, id_usuario))
+    else:
+        cursor.execute('''
+            UPDATE USUARIO SET NOME_COMPLETO =?, TELEFONE =?, EMAIL =?, TIPO_USUARIO =?, ATIVO =? WHERE ID_USUARIO =?
+        ''', (nome_completo, telefone, email, tipo_user, ativo, id_usuario))
+
+    con.commit()
+    cursor.close()
+
+    return jsonify({'success': "Informações atualizadas com sucesso!"}), 200
+
 @app.route('/cadastro/<int:id>', methods=['PUT'])
 def update_user(id):
     data = request.get_json()
@@ -93,8 +191,6 @@ def update_user(id):
     senha_hash = data.get('senha_hash')
     senha_nova = data.get('senha_nova')
     tipo_user = data.get('tipo_usuario')
-    ativo = data.get('ativo')
-
     cursor = con.cursor()
 
     cursor.execute("SELECT ID_USUARIO FROM USUARIO WHERE CPF_CNPJ = ? AND ID_USUARIO != ?", (cpf_cnpj, id))
@@ -132,12 +228,12 @@ def update_user(id):
 
     if not senha_nova and not senha_hash:
         if tipo_user == 1:
-            cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, ATIVO = ? WHERE id_usuario = ?",
-                (nome_completo, data_nascimento, cpf_cnpj, telefone, email, ativo, id))
+            cursor.execute("UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ? WHERE id_usuario = ?",
+                (nome_completo, data_nascimento, cpf_cnpj, telefone, email, id))
         else:
             cursor.execute(
-                "UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, ATUALIZADO_EM = ?, ATIVO = ? WHERE id_usuario = ?",
-                (nome_completo, data_nascimento, cpf_cnpj, telefone, email, data_att, ativo, id))
+                "UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, ATUALIZADO_EM = ? WHERE id_usuario = ?",
+                (nome_completo, data_nascimento, cpf_cnpj, telefone, email, data_att, id))
 
         con.commit()
         cursor.close()
@@ -148,8 +244,7 @@ def update_user(id):
                 'data_nascimento': data_nascimento,
                 'cpf_cnpj': cpf_cnpj,
                 'telefone': telefone,
-                'email': email,
-                'ativo': ativo
+                'email': email
             }
         })
 
@@ -171,12 +266,12 @@ def update_user(id):
 
     if tipo_user == 1:
         cursor.execute(
-            "UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ?, ATIVO = ? WHERE id_usuario = ?",
-            (nome_completo, data_nascimento, cpf_cnpj, telefone, email, senha_enviada, ativo, id))
+            "UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ? WHERE id_usuario = ?",
+            (nome_completo, data_nascimento, cpf_cnpj, telefone, email, senha_enviada, id))
     else:
         cursor.execute(
-            "UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ?, ATUALIZADO_EM = ?, ATIVO = ? WHERE id_usuario = ?",
-            (nome_completo, data_nascimento, cpf_cnpj, telefone, email, senha_enviada, data_att, ativo, id))
+            "UPDATE USUARIO SET NOME_COMPLETO = ?, DATA_NASCIMENTO = ?, CPF_CNPJ = ?, TELEFONE = ?, EMAIL = ?, SENHA_HASH = ?, ATUALIZADO_EM = ? WHERE id_usuario = ?",
+            (nome_completo, data_nascimento, cpf_cnpj, telefone, email, senha_enviada, data_att, id))
 
     con.commit()
     cursor.close()
@@ -188,8 +283,7 @@ def update_user(id):
             'data_nascimento': data_nascimento,
             'cpf_cnpj': cpf_cnpj,
             'telefone': telefone,
-            'email': email,
-            'ativo': ativo
+            'email': email
         }
     })
 
