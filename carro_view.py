@@ -16,18 +16,6 @@ def get_car_image(id_carro, filename):
     return send_from_directory(os.path.join(app.root_path, 'upload', 'Carros', str(id_carro)), filename)
 @app.route('/buscar-carro', methods=['POST'])
 def get_carro():
-    token = request.headers.get('Authorization')
-    if not token:
-        return jsonify({'error': 'Token de autenticação necessário'}), 401
-
-    token = remover_bearer(token)
-    try:
-        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
-        id_usuario = payload['id_usuario']
-    except jwt.ExpiredSignatureError:
-        return jsonify({'error': 'Token expirado'}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({'error': 'Token inválido'}), 401
 
     data = request.get_json()
 

@@ -49,7 +49,7 @@ def get_user():
 def get_user_filtro():
     data = request.get_json()
 
-    nomeLike = data.get('nome-like')
+    nomeLike = data.get('nome-like', '').lower()
     ativo = data.get('ativo')
     tipo_usuario = data.get('tipo_usuario')
 
