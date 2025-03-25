@@ -112,8 +112,8 @@ class CustomUsuarioPDF(FPDF):
 @app.route('/relatorio/carros', methods=['GET'])
 def criar_pdf_carro():
     marca = request.args.get('marca')
-    data_inicial = request.args.get('data_inicial')
-    data_final = request.args.get('data_final')
+    ano_fabricacao = request.args.get('ano_fabricacao')
+    ano_modelo = request.args.get('ano_modelo')
 
     query = """SELECT marca, modelo, placa, ano_modelo, ano_fabricacao, cor, renavam, cambio, combustivel, 
                       categoria, quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, versao 
@@ -124,16 +124,15 @@ def criar_pdf_carro():
         query += " AND UPPER(MARCA) = UPPER(?)"
         params.append(marca)
 
-    # Filtro por período (usando CRIADO_EM como referência)
-    if data_inicial and data_final:
-        query += " AND CRIADO_EM BETWEEN ? AND ?"
-        params.extend([data_inicial, data_final])
-    elif data_inicial:
-        query += " AND CRIADO_EM >= ?"
-        params.append(data_inicial)
-    elif data_final:
-        query += " AND CRIADO_EM <= ?"
-        params.append(data_final)
+    if ano_fabricacao and ano_modelo:
+        query += " AND ano_fabricacao = ? AND ano_modelo = ?"
+        params.extend([ano_fabricacao, ano_modelo])
+    elif ano_fabricacao:
+        query += " AND ano_fabricacao = ?"
+        params.append(ano_fabricacao)
+    elif ano_modelo:
+        query += " AND ano_modelo = ?"
+        params.append(ano_modelo)
 
     cursor = con.cursor()
     cursor.execute(query, params)
@@ -208,8 +207,8 @@ def criar_pdf_carro():
 @app.route('/relatorio/motos', methods=['GET'])
 def criar_pdf_moto():
     marca = request.args.get('marca')
-    data_inicial = request.args.get('data_inicial')
-    data_final = request.args.get('data_final')
+    ano_fabricacao = request.args.get('ano_fabricacao')
+    ano_modelo = request.args.get('ano_modelo')
 
     query = """SELECT marca, modelo, placa, ano_modelo, ano_fabricacao, categoria, cor, renavam, 
                       marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, 
@@ -221,15 +220,15 @@ def criar_pdf_moto():
         query += " AND UPPER(MARCA) = UPPER(?)"
         params.append(marca)
 
-    if data_inicial and data_final:
-        query += " AND CRIADO_EM BETWEEN ? AND ?"
-        params.extend([data_inicial, data_final])
-    elif data_inicial:
-        query += " AND CRIADO_EM >= ?"
-        params.append(data_inicial)
-    elif data_final:
-        query += " AND CRIADO_EM <= ?"
-        params.append(data_final)
+    if ano_fabricacao and ano_modelo:
+        query += " AND ano_fabricacao = ? AND ano_modelo = ?"
+        params.extend([ano_fabricacao, ano_modelo])
+    elif ano_fabricacao:
+        query += " AND ano_fabricacao = ?"
+        params.append(ano_fabricacao)
+    elif ano_modelo:
+        query += " AND ano_modelo = ?"
+        params.append(ano_modelo)
 
     cursor = con.cursor()
     cursor.execute(query, params)
