@@ -205,21 +205,23 @@ def update_user(id):
             'error': 'Telefone já cadastrado.'
         }), 401
 
+    cursor.execute("SELECT 1 FROM USUARIO WHERE email = ? AND ID_USUARIO != ?", (email, id))
+    if cursor.fetchone():
+        return jsonify({
+            'error': 'Email já cadastrado.'
+        }), 400
+
     cursor.execute("SELECT ID_USUARIO, NOME_COMPLETO, DATA_NASCIMENTO, CPF_CNPJ, TELEFONE, EMAIL, SENHA_HASH, ATUALIZADO_EM FROM USUARIO WHERE id_usuario = ?", (id,))
     user_data = cursor.fetchone()
 
     if not user_data:
+        cursor.close()
         return jsonify({'error': 'Usuário não encontrado.'}), 404
-
-    cursor.execute("SELECT 1 FROM USUARIO WHERE email = ?", (email,))
-
-    if email != user_data[5]:
-        if cursor.fetchone():
-            return jsonify({'error': 'Email já cadastrado.'}), 404
 
     if user_data[7] is not None:
         ultima_atualizacao = user_data[7]
         if datetime.now() - ultima_atualizacao < timedelta(hours=24):
+            cursor.close()
             return jsonify({
                 'error': 'Você só pode atualizar novamente após 24 horas da última atualização.'
             }), 403
