@@ -311,6 +311,11 @@ def criar_pdf_usuarios():
     ano = request.args.get('ano', '').strip()
     ativo = request.args.get('ativo', '').strip()
 
+    if ativo.lower() == "ativo":
+        ativo = 1
+    else:
+        ativo = 0
+
     # Monta a query com todos os campos, mas adiciona os filtros se forem informados
     query = """
         SELECT 
@@ -347,7 +352,7 @@ def criar_pdf_usuarios():
         params.append(int(ano))
 
     # Filtro por status (ativo)
-    if ativo:
+    if ativo in [0, 1]:
         query += " AND ativo = ?"
         params.append(int(ativo))
 
