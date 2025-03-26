@@ -125,7 +125,6 @@ def create_user():
     con.commit()
 
     cursor.close()
-
     token = generate_token(id_usuario)
 
     return jsonify({
@@ -133,7 +132,7 @@ def create_user():
         'dados': {
             'nome_completo': nome,
             'email': email,
-            'id_usuario': id,
+            'id_usuario': id_usuario,
             'tipo_usuario': tipo_usuario,
             'token': token
         }
@@ -393,3 +392,38 @@ def login_user():
         return jsonify({"error": "Número máximo de tentativas de login excedido."}), 401
 
     return jsonify({"error": "Senha incorreta."}), 401 
+
+# Verificar tipo usuário
+
+def remover_bearer(token):
+    if token.startswith('Bearer '):
+        return token[len('Bearer '):]
+    else:
+        return token
+
+@app.route('/obter_tipo_usuario', methods=['GET'])
+def verificar_tipo_usuario():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    cursor.execute("SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?", (id_usuario,))
+
+    tipo_usuario = cursor.fetchone()[0]
+
+    cursor.close()
+
+    return jsonify({
+        'tipo_usuario': tipo_usuario
+    })

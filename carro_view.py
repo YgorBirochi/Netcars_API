@@ -146,6 +146,13 @@ def upload_img(id):
     except jwt.InvalidTokenError:
         return jsonify({'error': 'Token inválido'}), 401
 
+    cursor = con.cursor()
+
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type not in [1, 2]:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
     imagens = request.files.getlist('imagens')
 
     if not imagens:
@@ -153,7 +160,6 @@ def upload_img(id):
             'error': 'Dados incompletos',
             'missing_fields': 'Imagens'
         }), 400
-
 
     # Define a pasta destino usando o id do carro
     pasta_destino = os.path.join(upload_folder, "Carros", str(id))
@@ -185,6 +191,13 @@ def add_carro():
         return jsonify({'mensagem': 'Token expirado'}), 401
     except jwt.InvalidTokenError:
         return jsonify({'mensagem': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type not in [1,2]:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
 
     data = request.get_json()
 
@@ -223,8 +236,6 @@ def add_carro():
 
     # Alterando fuso horário para o de Brasília
     criado_em = datetime.now(pytz.timezone('America/Sao_Paulo'))
-
-    cursor = con.cursor()
 
     # Retornar caso já exista placa cadastrada
     cursor.execute("SELECT 1 FROM CARROS WHERE PLACA = ?", (placa,))
