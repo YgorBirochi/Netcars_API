@@ -281,6 +281,7 @@ def update_user(id):
         return jsonify({
             'success': "Informações atualizadas com sucesso!",
             'user': {
+                'id_usuario': id,
                 'nome_completo': nome_completo,
                 'data_nascimento': data_nascimento,
                 'cpf_cnpj': cpf_cnpj,
