@@ -448,8 +448,8 @@ def editar_carro(id):
     }), 200
 
 
-@app.route('/qnt_carros')
-def qnt_carros():
+@app.route('/qnt_veiculos')
+def qnt_veiculos():
     cursor = con.cursor()
 
     cursor.execute('''
@@ -458,8 +458,17 @@ def qnt_carros():
     ''')
 
     qnt_carros = cursor.fetchone()[0]
+
+    cursor.execute('''
+        SELECT COUNT(*) AS qnt_motos
+        FROM MOTOS
+    ''')
+
+    qnt_motos = cursor.fetchone()[0]
+
     cursor.close()
 
     return jsonify({
-        'qnt_carros': qnt_carros
+        'qnt_carros': qnt_carros,
+        'qnt_motos': qnt_motos
     }), 200
