@@ -355,3 +355,19 @@ def editar_moto(id):
             'ativo': ativo
         }
     }), 200
+
+@app.route('/qnt_motos')
+def qnt_motos():
+    cursor = con.cursor()
+
+    cursor.execute('''
+        SELECT COUNT(*) AS qnt_motos
+        FROM MOTOS
+    ''')
+
+    qnt_motos = cursor.fetchone()[0]
+    cursor.close()
+
+    return jsonify({
+        'qnt_motos': qnt_motos
+    }), 200

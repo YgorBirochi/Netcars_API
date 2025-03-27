@@ -235,9 +235,6 @@ def add_carro():
     placa = data.get('placa').upper()
     ativo = 1
 
-    print(preco_venda)
-    print(preco_compra)
-
     if int(quilometragem) < 0:
         return jsonify({
             'error': 'A quilometragem não pode ser negativa.'
@@ -451,4 +448,18 @@ def editar_carro(id):
     }), 200
 
 
+@app.route('/qnt_carros')
+def qnt_carros():
+    cursor = con.cursor()
 
+    cursor.execute('''
+        SELECT COUNT(*) AS qnt_carros
+        FROM CARROS
+    ''')
+
+    qnt_carros = cursor.fetchone()[0]
+    cursor.close()
+
+    return jsonify({
+        'qnt_carros': qnt_carros
+    }), 200
