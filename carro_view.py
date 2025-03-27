@@ -4,6 +4,7 @@ from datetime import datetime
 import pytz
 import os, uuid
 import jwt
+import shutil
 
 def remover_bearer(token):
     if token.startswith('Bearer '):
@@ -181,16 +182,16 @@ def upload_img(id):
 def add_carro():
     token = request.headers.get('Authorization')
     if not token:
-        return jsonify({'mensagem': 'Token de autenticação necessário'}), 401
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
 
     token = remover_bearer(token)
     try:
         payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
         id_usuario = payload['id_usuario']
     except jwt.ExpiredSignatureError:
-        return jsonify({'mensagem': 'Token expirado'}), 401
+        return jsonify({'error': 'Token expirado'}), 401
     except jwt.InvalidTokenError:
-        return jsonify({'mensagem': 'Token inválido'}), 401
+        return jsonify({'error': 'Token inválido'}), 401
 
     cursor = con.cursor()
 
@@ -234,6 +235,19 @@ def add_carro():
     placa = data.get('placa').upper()
     ativo = 1
 
+    print(preco_venda)
+    print(preco_compra)
+
+    if int(quilometragem) < 0:
+        return jsonify({
+            'error': 'A quilometragem não pode ser negativa.'
+        }), 400
+
+    if float(preco_compra) < 0 or float(preco_venda) < 0:
+        return jsonify({
+            'error': 'O preço não pode ser negativo.'
+        }), 400
+
     # Alterando fuso horário para o de Brasília
     criado_em = datetime.now(pytz.timezone('America/Sao_Paulo'))
 
@@ -248,8 +262,18 @@ def add_carro():
     cursor.execute("SELECT 1 FROM CARROS WHERE RENAVAM = ?", (renavam,))
     if cursor.fetchone():
         return jsonify({
-            'error': 'Documento do veículo já cadastrada.'
+            'error': 'Documento do veículo já cadastrado.'
         }), 409
+
+    if (ano_fabricacao < ano_modelo):
+        return jsonify({
+            'error': 'Ano de fabricação não pode ser anterior ao ano do modelo.'
+        }), 400
+
+    if (preco_venda < preco_compra):
+        return jsonify({
+            'error': 'Preço de venda não pode ser menor ao preço de compra.'
+        }), 400
 
     cursor.execute('''
         INSERT INTO CARROS
@@ -293,6 +317,26 @@ def add_carro():
 
 @app.route('/carro/<int:id>', methods=['DELETE'])
 def deletar_carro(id):
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type not in [1,2]:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
     cursor = con.cursor()
 
     cursor.execute('SELECT 1 FROM CARROS WHERE ID_CARRO = ?', (id,))
@@ -305,8 +349,18 @@ def deletar_carro(id):
     con.commit()
     cursor.close()
 
+    pasta_destino = os.path.join(upload_folder, "Carros", str(id))
+
+    # Verifica se a pasta existe e a remove
+    if os.path.exists(pasta_destino):
+        try:
+            shutil.rmtree(pasta_destino)
+        except Exception as e:
+            return jsonify({'error': f'Erro ao deletar a pasta do veículo: {str(e)}'}), 500
+
     return jsonify({
-        'success': "Veículo deletado com sucesso!"
+        'success': "Veículo deletado com sucesso!",
+        'tipo_usuario': user_type
     }), 200
 
 @app.route('/carro/<int:id>', methods=['PUT'])
