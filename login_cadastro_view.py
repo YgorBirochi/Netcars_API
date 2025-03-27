@@ -22,30 +22,15 @@ def validar_senha(senha):
 
     return True
 
-
 def formatarNome(nome):
-    partsNome = nome.split()
+    partes = nome.split()
+    partes_formatadas = [p.lower().capitalize() for p in partes]
+    return " ".join(partes_formatadas)
 
-    # Extrai o primeiro nome
-    primeiro_nome = partsNome[0]
-
-    # Se houver mais de uma palavra, trata as demais como sobrenome
-    if len(partsNome) > 1:
-        sobrenome = " ".join(partsNome[1:])
-    else:
-        sobrenome = ""
-
-    # Formata o primeiro nome e o sobrenome (apenas a primeira letra em maiúsculo)
-    primeiro_nome_formatado = primeiro_nome.lower().capitalize()
-    sobrenome_formatado = sobrenome.lower().capitalize() if sobrenome else ""
-
-    # Monta o nome completo
-    if sobrenome_formatado:
-        nomeCompleto = f"{primeiro_nome_formatado} {sobrenome_formatado}"
-    else:
-        nomeCompleto = primeiro_nome_formatado
-
-    return nomeCompleto
+@app.route('/testar_funcao', methods=['POST'])
+def testar_funcao():
+    nome = request.get_json().get('nome')
+    return jsonify({'nome_formatado': formatarNome(nome)}), 200
 
 @app.route('/cadastro', methods=['GET'])
 def get_user():
