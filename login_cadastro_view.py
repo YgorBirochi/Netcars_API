@@ -22,6 +22,31 @@ def validar_senha(senha):
 
     return True
 
+
+def formatarNome(nome):
+    partsNome = nome.split()
+
+    # Extrai o primeiro nome
+    primeiro_nome = partsNome[0]
+
+    # Se houver mais de uma palavra, trata as demais como sobrenome
+    if len(partsNome) > 1:
+        sobrenome = " ".join(partsNome[1:])
+    else:
+        sobrenome = ""
+
+    # Formata o primeiro nome e o sobrenome (apenas a primeira letra em maiúsculo)
+    primeiro_nome_formatado = primeiro_nome.lower().capitalize()
+    sobrenome_formatado = sobrenome.lower().capitalize() if sobrenome else ""
+
+    # Monta o nome completo
+    if sobrenome_formatado:
+        nomeCompleto = f"{primeiro_nome_formatado} {sobrenome_formatado}"
+    else:
+        nomeCompleto = primeiro_nome_formatado
+
+    return nomeCompleto
+
 @app.route('/cadastro', methods=['GET'])
 def get_user():
     cursor = con.cursor()
@@ -106,6 +131,8 @@ def create_user():
     senha = data.get('senha_hash')
     tipo_usuario = data.get('tipo_usuario')
 
+    nome = formatarNome(nome)
+
     cursor = con.cursor()
     cursor.execute("SELECT 1 FROM USUARIO WHERE email = ?", (email,))
 
@@ -148,6 +175,8 @@ def update_user_simples():
     email = data.get('email')
     tipo_user = data.get('tipo_usuario')
     ativo = data.get('ativo')
+
+    nome_completo = formatarNome(nome_completo)
 
     if nome_completo is None or email is None or tipo_user is None or ativo is None or id_usuario is None:
         return jsonify({
@@ -197,6 +226,8 @@ def update_user(id):
     senha_nova = data.get('senha_nova')
     tipo_user = data.get('tipo_usuario')
     cursor = con.cursor()
+
+    nome_completo = formatarNome(nome_completo)
 
     cursor.execute("SELECT ID_USUARIO FROM USUARIO WHERE CPF_CNPJ = ? AND ID_USUARIO != ?", (cpf_cnpj, id))
     if cursor.fetchone():
