@@ -15,6 +15,7 @@ def remover_bearer(token):
 @app.route('/uploads/carros/<int:id_carro>/<filename>')
 def get_car_image(id_carro, filename):
     return send_from_directory(os.path.join(app.root_path, 'upload', 'Carros', str(id_carro)), filename)
+
 @app.route('/buscar-carro', methods=['POST'])
 def get_carro():
 

@@ -18,22 +18,79 @@ def get_moto_image(id_moto, filename):
 
 @app.route('/buscar-moto', methods=['POST'])
 def get_moto():
-    cursor = con.cursor()
+    data = request.get_json()
 
-    cursor.execute('''
+    idFiltro = data.get('id')
+    anoMaxFiltro = data.get('ano-max')
+    anoMinFiltro = data.get('ano-min')
+    categoriaFiltro = data.get('categoria')
+    cidadeFiltro = data.get('cidade')
+    estadoFiltro = data.get('estado')
+    marcaFiltro = data.get('marca')
+    precoMax = data.get('preco-max')
+    precoMinFiltro = data.get('preco-min')
+    coresFiltro = data.get('cores')  # Pode ser uma lista ou string
+
+    # Query base
+    query = '''
         SELECT id_moto, marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, 
                tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
                preco_compra, preco_venda, placa, alimentacao, criado_em, ativo 
         FROM MOTOS
-    ''')
+    '''
+    conditions = []
+    params = []
 
+    # Adiciona as condições de acordo com os filtros informados
+    if idFiltro:
+        conditions.append("id_moto = ?")
+        params.append(idFiltro)
+    if anoMaxFiltro:
+        conditions.append("ano_modelo <= ?")
+        params.append(anoMaxFiltro)
+    if anoMinFiltro:
+        conditions.append("ano_modelo >= ?")
+        params.append(anoMinFiltro)
+    if categoriaFiltro:
+        conditions.append("categoria = ?")
+        params.append(categoriaFiltro)
+    if cidadeFiltro:
+        conditions.append("cidade = ?")
+        params.append(cidadeFiltro)
+    if estadoFiltro:
+        conditions.append("estado = ?")
+        params.append(estadoFiltro)
+    if marcaFiltro:
+        conditions.append("marca = ?")
+        params.append(marcaFiltro)
+    if precoMax:
+        conditions.append("preco_venda <= ?")
+        params.append(precoMax)
+    if precoMinFiltro:
+        conditions.append("preco_venda >= ?")
+        params.append(precoMinFiltro)
+    if coresFiltro:
+        # Se coresFiltro for uma lista, utiliza o operador IN; caso contrário, compara por igualdade
+        if isinstance(coresFiltro, list):
+            placeholders = ','.join('?' * len(coresFiltro))
+            conditions.append(f"cor IN ({placeholders})")
+            params.extend(coresFiltro)
+        else:
+            conditions.append("cor = ?")
+            params.append(coresFiltro)
+
+    # Se houver condições, concatena-as à query base
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    cursor = con.cursor()
+    cursor.execute(query, params)
     fetch = cursor.fetchall()
-    lista_motos = []
 
+    lista_motos = []
     for moto in list(fetch):
         id_moto = moto[0]
-
-        # Define o caminho para a pasta de imagens da moto (ex: uploads/motos/<id_moto>)
+        # Define o caminho para a pasta de imagens da moto (ex: uploads/Motos/<id_moto>)
         images_dir = os.path.join(app.root_path, upload_folder, 'Motos', str(id_moto))
         imagens = []
 
@@ -41,7 +98,7 @@ def get_moto():
         if os.path.exists(images_dir):
             for file in os.listdir(images_dir):
                 if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                    # Cria uma URL para a imagem.
+                    # Cria a URL para a imagem
                     imagem_url = url_for('get_moto_image', id_moto=id_moto, filename=file, _external=True)
                     imagens.append(imagem_url)
 
@@ -69,7 +126,7 @@ def get_moto():
             'alimentacao': moto[20],
             'criado_em': moto[21],
             'ativo': moto[22],
-            'imagens': imagens  # Inclusão da lista de imagens
+            'imagens': imagens
         })
 
     qnt_motos = len(lista_motos)
