@@ -27,11 +27,6 @@ def formatarNome(nome):
     partes_formatadas = [p.lower().capitalize() for p in partes]
     return " ".join(partes_formatadas)
 
-@app.route('/testar_funcao', methods=['POST'])
-def testar_funcao():
-    nome = request.get_json().get('nome')
-    return jsonify({'nome_formatado': formatarNome(nome)}), 200
-
 @app.route('/cadastro', methods=['GET'])
 def get_user():
     cursor = con.cursor()
@@ -263,6 +258,9 @@ def update_user(id):
 
         con.commit()
         cursor.close()
+
+        token = generate_token(id)
+
         return jsonify({
             'success': "Informações atualizadas com sucesso!",
             'user': {
@@ -271,7 +269,8 @@ def update_user(id):
                 'data_nascimento': data_nascimento,
                 'cpf_cnpj': cpf_cnpj,
                 'telefone': telefone,
-                'email': email
+                'email': email,
+                'token': token
             }
         })
 
