@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request, url_for, send_from_directory
 from main import app, con, upload_folder, senha_secreta
 from datetime import datetime
 import pytz
-import os, uuid
+import os, uuid, shutil
 import jwt
 
 def remover_bearer(token):
@@ -11,11 +11,12 @@ def remover_bearer(token):
     else:
         return token
 
-# Rota para servir as imagens de motos com o parâmetro correto
+# Rota para servir as imagens de motos
 @app.route('/uploads/motos/<int:id_moto>/<filename>')
 def get_moto_image(id_moto, filename):
     return send_from_directory(os.path.join(app.root_path, upload_folder, 'Motos', str(id_moto)), filename)
 
+# Buscar motos com filtros
 @app.route('/buscar-moto', methods=['POST'])
 def get_moto():
     data = request.get_json()
@@ -29,19 +30,17 @@ def get_moto():
     marcaFiltro = data.get('marca')
     precoMax = data.get('preco-max')
     precoMinFiltro = data.get('preco-min')
-    coresFiltro = data.get('cores')  # Pode ser uma lista ou string
+    coresFiltro = data.get('cores')  # pode ser lista ou string
 
-    # Query base
     query = '''
-        SELECT id_moto, marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, 
-               tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
-               preco_compra, preco_venda, placa, alimentacao, criado_em, ativo 
+        SELECT id_moto, marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, 
+               marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, 
+               estado, cidade, quilometragem, preco_compra, preco_venda, placa, alimentacao, criado_em, ativo
         FROM MOTOS
     '''
     conditions = []
     params = []
 
-    # Adiciona as condições de acordo com os filtros informados
     if idFiltro:
         conditions.append("id_moto = ?")
         params.append(idFiltro)
@@ -70,7 +69,6 @@ def get_moto():
         conditions.append("preco_venda >= ?")
         params.append(precoMinFiltro)
     if coresFiltro:
-        # Se coresFiltro for uma lista, utiliza o operador IN; caso contrário, compara por igualdade
         if isinstance(coresFiltro, list):
             placeholders = ','.join('?' * len(coresFiltro))
             conditions.append(f"cor IN ({placeholders})")
@@ -78,8 +76,6 @@ def get_moto():
         else:
             conditions.append("cor = ?")
             params.append(coresFiltro)
-
-    # Se houver condições, concatena-as à query base
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
 
@@ -88,20 +84,15 @@ def get_moto():
     fetch = cursor.fetchall()
 
     lista_motos = []
-    for moto in list(fetch):
+    for moto in fetch:
         id_moto = moto[0]
-        # Define o caminho para a pasta de imagens da moto (ex: uploads/Motos/<id_moto>)
         images_dir = os.path.join(app.root_path, upload_folder, 'Motos', str(id_moto))
         imagens = []
-
-        # Verifica se o diretório existe
         if os.path.exists(images_dir):
             for file in os.listdir(images_dir):
                 if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                    # Cria a URL para a imagem
                     imagem_url = url_for('get_moto_image', id_moto=id_moto, filename=file, _external=True)
                     imagens.append(imagem_url)
-
         lista_motos.append({
             'id': moto[0],
             'marca': moto[1],
@@ -137,33 +128,40 @@ def get_moto():
         'veiculos': lista_motos
     }), 200
 
+# Upload de imagens para motos (requer autenticação e acesso de administrador)
 @app.route('/moto/upload_img/<int:id>', methods=['POST'])
 def upload_img_moto(id):
     token = request.headers.get('Authorization')
     if not token:
-        return jsonify({'mensagem': 'Token de autenticação necessário'}), 401
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
 
     token = remover_bearer(token)
     try:
         payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
         id_usuario = payload['id_usuario']
     except jwt.ExpiredSignatureError:
-        return jsonify({'mensagem': 'Token expirado'}), 401
+        return jsonify({'error': 'Token expirado'}), 401
     except jwt.InvalidTokenError:
-        return jsonify({'mensagem': 'Token inválido'}), 401
+        return jsonify({'error': 'Token inválido'}), 401
+
+    # Verifica se o usuário possui acesso (administrador)
+    cursor = con.cursor()
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type not in [1, 2]:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
 
     imagens = request.files.getlist('imagens')
-
     if not imagens:
         return jsonify({
             'error': 'Dados incompletos',
             'missing_fields': 'Imagens'
         }), 400
+
     pasta_destino = os.path.join(upload_folder, "Motos", str(id))
     os.makedirs(pasta_destino, exist_ok=True)
 
-    # Salva cada imagem na pasta, nomeando sequencialmente (1.jpeg, 2.jpeg, 3.jpeg, ...)
-    saved_images = []  # para armazenar os nomes dos arquivos salvos
+    saved_images = []
     for index, imagem in enumerate(imagens, start=1):
         nome_imagem = f"{index}.jpeg"
         imagem_path = os.path.join(pasta_destino, nome_imagem)
@@ -174,6 +172,7 @@ def upload_img_moto(id):
         'success': "Imagens adicionadas!"
     }), 200
 
+# Adicionar nova moto (requer autenticação e acesso de administrador)
 @app.route('/moto', methods=['POST'])
 def add_moto():
     token = request.headers.get('Authorization')
@@ -189,9 +188,15 @@ def add_moto():
     except jwt.InvalidTokenError:
         return jsonify({'error': 'Token inválido'}), 401
 
+    # Verifica acesso de administrador
+    cursor = con.cursor()
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type not in [1, 2]:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
     data = request.get_json()
 
-    # Lista de campos obrigatórios
     required_fields = [
         'marca', 'modelo', 'ano_modelo', 'ano_fabricacao', 'categoria',
         'cor', 'renavam', 'marchas', 'partida', 'tipo_motor', 'cilindrada',
@@ -229,19 +234,26 @@ def add_moto():
     licenciado = data.get('licenciado')
     ativo = 1
 
-    # Alterando fuso horário para o de Brasília
+    if int(quilometragem) < 0:
+        return jsonify({
+            'error': 'A quilometragem não pode ser negativa.'
+        }), 400
+
+    if float(preco_compra) < 0 or float(preco_venda) < 0:
+        return jsonify({
+            'error': 'O preço não pode ser negativo.'
+        }), 400
+
     criado_em = datetime.now(pytz.timezone('America/Sao_Paulo'))
 
-    cursor = con.cursor()
-
-    # Retornar caso já exista placa cadastrada
+    # Verifica se já existe placa cadastrada
     cursor.execute("SELECT 1 FROM MOTOS WHERE PLACA = ?", (placa,))
     if cursor.fetchone():
         return jsonify({
             'error': 'Placa do veículo já cadastrada.'
         }), 409
 
-    # Retornar caso já exista RENAVAM cadastrado
+    # Verifica se já existe RENAVAM cadastrado
     cursor.execute("SELECT 1 FROM MOTOS WHERE RENAVAM = ?", (renavam,))
     if cursor.fetchone():
         return jsonify({
@@ -249,16 +261,15 @@ def add_moto():
         }), 409
 
     cursor.execute('''
-    INSERT INTO MOTOS
-    (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, 
-    tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
-    preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado)
-    VALUES
-    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ID_MOTO
+        INSERT INTO MOTOS
+        (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, 
+         tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem, 
+         preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado)
+        VALUES
+        (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING ID_MOTO
     ''', (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida,
-         tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem,
-         preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado))
-
+          tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, quilometragem,
+          preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado))
     id_moto = cursor.fetchone()[0]
     con.commit()
     cursor.close()
@@ -274,7 +285,6 @@ def add_moto():
             'categoria': categoria,
             'cor': cor,
             'renavam': renavam,
-            'licenciado': licenciado,
             'marchas': marchas,
             'partida': partida,
             'tipo_motor': tipo_motor,
@@ -288,40 +298,65 @@ def add_moto():
             'preco_venda': preco_venda,
             'placa': placa,
             'alimentacao': alimentacao,
+            'licenciado': licenciado,
             'criado_em': criado_em,
             'ativo': ativo
         }
     }), 200
 
+# Deletar moto (requer autenticação, verificação de administrador e remoção da pasta de imagens)
 @app.route('/moto/<int:id>', methods=['DELETE'])
 def deletar_moto(id):
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
     cursor = con.cursor()
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type not in [1, 2]:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
 
-    cursor.execute('SELECT 1 FROM motos WHERE ID_MOTO = ?', (id,))
-
+    cursor.execute('SELECT 1 FROM MOTOS WHERE ID_MOTO = ?', (id,))
     if not cursor.fetchone():
         return jsonify({'error': 'Veículo não encontrado.'}), 404
 
     cursor.execute('DELETE FROM MOTOS WHERE ID_MOTO = ?', (id,))
-
     con.commit()
     cursor.close()
 
-    return jsonify({
-        'success': "Veículo deletado com sucesso!"
-    })
+    pasta_destino = os.path.join(upload_folder, "Motos", str(id))
+    full_path = os.path.join(app.root_path, pasta_destino)
+    if os.path.exists(full_path):
+        try:
+            shutil.rmtree(full_path)
+        except Exception as e:
+            return jsonify({'error': f'Erro ao deletar a pasta do veículo: {str(e)}'}), 500
 
+    return jsonify({
+        'success': "Veículo deletado com sucesso!",
+        'tipo_usuario': user_type
+    }), 200
+
+# Editar moto
 @app.route('/moto/<int:id>', methods=['PUT'])
 def editar_moto(id):
     cursor = con.cursor()
 
-    # Verificando a existência do carro
     cursor.execute('SELECT 1 FROM MOTOS WHERE ID_MOTO = ?', (id,))
     if not cursor.fetchone():
         return jsonify({'error': 'Veículo não encontrado.'}), 404
 
     data = request.get_json()
-
     fields = [
         'marca', 'modelo', 'ano_modelo', 'ano_fabricacao', 'categoria',
         'cor', 'renavam', 'marchas', 'partida', 'tipo_motor', 'cilindrada',
@@ -331,18 +366,15 @@ def editar_moto(id):
     ]
 
     cursor.execute('''
-        SELECT marca, modelo, ano_modelo, ano_fabricacao, licenciado, categoria, cor, renavam, marchas, 
-        partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade, 
-        quilometragem, preco_compra, preco_venda, placa, criado_em, ativo, alimentacao
+        SELECT marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, 
+               marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, 
+               refrigeracao, estado, cidade, quilometragem, preco_compra, preco_venda, 
+               placa, alimentacao, criado_em, ativo, licenciado
         FROM MOTOS WHERE ID_MOTO = ?
     ''', (id,))
-
-    data_ant = []
-    for item in cursor.fetchone():
-        data_ant.append(item)
+    data_ant = list(cursor.fetchone())
 
     for i in range(len(data_ant)):
-        print(fields[i])
         if data.get(fields[i]) == data_ant[i] or not data.get(fields[i]):
             data[fields[i]] = data_ant[i]
 
@@ -372,15 +404,14 @@ def editar_moto(id):
 
     cursor.execute('''
         UPDATE MOTOS
-        SET marca =?, modelo =?, ano_modelo =?, ano_fabricacao =?, categoria =?, cor =?, renavam = ?, marchas =?, partida =?, 
-        tipo_motor =?, cilindrada=?, freio_dianteiro_traseiro =?, refrigeracao =?, estado =?, cidade =?,  quilometragem =?, 
-        preco_compra =?, preco_venda =?, placa =?, criado_em = ?, ativo =?, alimentacao =?, licenciado =?
-        where ID_MOTO = ?
-        ''',
-       (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida,
-        tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade,
-        quilometragem, preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado))
-
+        SET marca = ?, modelo = ?, ano_modelo = ?, ano_fabricacao = ?, categoria = ?, cor = ?, 
+            renavam = ?, marchas = ?, partida = ?, tipo_motor = ?, cilindrada = ?, 
+            freio_dianteiro_traseiro = ?, refrigeracao = ?, estado = ?, cidade = ?, quilometragem = ?, 
+            preco_compra = ?, preco_venda = ?, placa = ?, criado_em = ?, ativo = ?, alimentacao = ?, licenciado = ?
+        WHERE ID_MOTO = ?
+    ''', (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida,
+          tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade,
+          quilometragem, preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado, id))
     con.commit()
     cursor.close()
 
@@ -391,7 +422,6 @@ def editar_moto(id):
             'modelo': modelo,
             'ano_modelo': ano_modelo,
             'ano_fabricacao': ano_fabricacao,
-            'licenciado': licenciado,
             'categoria': categoria,
             'cor': cor,
             'renavam': renavam,
@@ -409,6 +439,7 @@ def editar_moto(id):
             'placa': placa,
             'alimentacao': alimentacao,
             'criado_em': criado_em,
-            'ativo': ativo
+            'ativo': ativo,
+            'licenciado': licenciado
         }
     }), 200

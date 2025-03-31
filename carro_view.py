@@ -18,7 +18,6 @@ def get_car_image(id_carro, filename):
 
 @app.route('/buscar-carro', methods=['POST'])
 def get_carro():
-
     data = request.get_json()
 
     idFiltro = data.get('id')
