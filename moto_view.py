@@ -17,6 +17,55 @@ def get_moto_image(id_moto, filename):
     return send_from_directory(os.path.join(app.root_path, upload_folder, 'Motos', str(id_moto)), filename)
 
 # Buscar motos com filtros
+
+@app.route('/cancelar-reserva-moto/<int:id>', methods=['DELETE'])
+def cancelar_reserva_moto(id):
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+
+    tipo_user = cursor.fetchone()[0]
+
+    try:
+        if tipo_user in [1, 2]:
+            cursor.execute('''
+                UPDATE MOTOS SET RESERVADO = NULL, RESERVADO_EM = NULL, ID_USUARIO_RESERVA = NULL WHERE ID_MOTO =?
+                ''', (id,))
+        else:
+            cursor.execute('''
+                SELECT 1 FROM MOTOS WHERE RESERVADO IS TRUE AND ID_MOTO =? AND ID_USUARIO_RESERVA = ?
+                ''', (id, id_usuario))
+            check = cursor.fetchone()
+            if check:
+                cursor.execute('''
+                   UPDATE MOTOS SET RESERVADO = NULL, RESERVADO_EM = NULL, ID_USUARIO_RESERVA = NULL WHERE ID_MOTO =?
+                   ''', (id,))
+            else:
+                return jsonify({
+                    'error': 'Apenas o dono da reserva pode cancelá-la.'
+                }), 400
+    except Exception as e:
+        return jsonify({'error': e}), 400
+    finally:
+        con.commit()
+        cursor.close()
+        return jsonify({
+            'success': 'Reserva cancelada com sucesso!'
+        }), 200
+
 @app.route('/buscar-moto', methods=['POST'])
 def get_moto():
     data = request.get_json()
@@ -31,62 +80,69 @@ def get_moto():
        '''
 
     token = request.headers.get('Authorization')
+
+    cursor = con.cursor()
+
     if token:
         token = remover_bearer(token)
         payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
         id_usuario = payload['id_usuario']
 
-        cursor = con.cursor()
+        cursor.execute("SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?", (id_usuario,))
+        tipo_user = cursor.fetchone()[0]
 
-        cursor.execute('SELECT 1 FROM MOTOS WHERE RESERVADO IS TRUE AND ID_USUARIO_RESERVA = ? AND ID_MOTO = ?', (id_usuario, idFiltro))
+        if tipo_user == 3:
+            cursor.execute('SELECT ID_USUARIO_RESERVA FROM MOTOS WHERE RESERVADO IS TRUE AND ID_USUARIO_RESERVA = ? AND ID_MOTO = ?', (id_usuario, idFiltro))
+        else:
+            cursor.execute('SELECT ID_USUARIO_RESERVA FROM MOTOS WHERE RESERVADO IS TRUE AND ID_MOTO = ?', (idFiltro,))
 
         usuario_reservou = cursor.fetchone()
 
         if usuario_reservou:
-            cursor.execute(f'{query} WHERE ID_MOTO = ?', (idFiltro,))
+                cursor.execute(f'{query} WHERE ID_MOTO = ?', (idFiltro,))
 
-            moto = cursor.fetchone()
+                moto = cursor.fetchone()
 
-            images_dir = os.path.join(app.root_path, upload_folder, 'Motos', str(idFiltro))
-            imagens = []
-            if os.path.exists(images_dir):
-                for file in os.listdir(images_dir):
-                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                        imagem_url = url_for('get_moto_image', id_moto=idFiltro, filename=file, _external=True)
-                        imagens.append(imagem_url)
+                images_dir = os.path.join(app.root_path, upload_folder, 'Motos', str(idFiltro))
+                imagens = []
+                if os.path.exists(images_dir):
+                    for file in os.listdir(images_dir):
+                        if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                            imagem_url = url_for('get_moto_image', id_moto=idFiltro, filename=file, _external=True)
+                            imagens.append(imagem_url)
 
-            dados_moto = {
-                'id': moto[0],
-                'marca': moto[1],
-                'modelo': moto[2],
-                'ano_modelo': moto[3],
-                'ano_fabricacao': moto[4],
-                'categoria': moto[5],
-                'cor': moto[6],
-                'renavam': moto[7],
-                'marchas': moto[8],
-                'partida': moto[9],
-                'tipo_motor': moto[10],
-                'cilindrada': moto[11],
-                'freio_dianteiro_traseiro': moto[12],
-                'refrigeracao': moto[13],
-                'estado': moto[14],
-                'cidade': moto[15],
-                'quilometragem': moto[16],
-                'preco_compra': moto[17],
-                'preco_venda': moto[18],
-                'placa': moto[19],
-                'alimentacao': moto[20],
-                'criado_em': moto[21],
-                'ativo': moto[22],
-                'imagens': imagens
-            }
+                dados_moto = {
+                    'id': moto[0],
+                    'marca': moto[1],
+                    'modelo': moto[2],
+                    'ano_modelo': moto[3],
+                    'ano_fabricacao': moto[4],
+                    'categoria': moto[5],
+                    'cor': moto[6],
+                    'renavam': moto[7],
+                    'marchas': moto[8],
+                    'partida': moto[9],
+                    'tipo_motor': moto[10],
+                    'cilindrada': moto[11],
+                    'freio_dianteiro_traseiro': moto[12],
+                    'refrigeracao': moto[13],
+                    'estado': moto[14],
+                    'cidade': moto[15],
+                    'quilometragem': moto[16],
+                    'preco_compra': moto[17],
+                    'preco_venda': moto[18],
+                    'placa': moto[19],
+                    'alimentacao': moto[20],
+                    'criado_em': moto[21],
+                    'ativo': moto[22],
+                    'imagens': imagens
+                }
 
-            cursor.close()
-            return jsonify({
-                "reserva": True,
-                "veiculos": [dados_moto]
-            }), 200
+                cursor.close()
+                return jsonify({
+                    "reserva": True,
+                    "veiculos": [dados_moto]
+                }), 200
 
     anoMaxFiltro = data.get('ano-max')
     anoMinFiltro = data.get('ano-min')

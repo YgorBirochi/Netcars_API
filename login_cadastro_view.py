@@ -322,14 +322,11 @@ def update_user(id):
 def deletar_usuario(id):
     cursor = con.cursor()
 
-    cursor.execute('SELECT ID_USUARIO FROM USUARIO')
+    cursor.execute('SELECT 1 FROM USUARIO WHERE ID_USUARIO = ?', (id,))
 
-    possui_id = False
-    for i in cursor.fetchall():
-        if i[0] == id:
-            possui_id = True
+    data = cursor.fetchone()
 
-    if possui_id == False:
+    if not data:
         return jsonify({
             'error': 'Usuário não encontrado.'
         })
@@ -339,6 +336,19 @@ def deletar_usuario(id):
     ''', (id,))
 
     con.commit()
+
+    # Apagar reservas ao deletar conta
+    cursor.execute(
+        'UPDATE CARROS SET RESERVADO = NULL, RESERVADO_EM = NULL, ID_USUARIO_RESERVA = NULL WHERE ID_USUARIO_RESERVA = ?',
+        (id,)
+    )
+
+    # Apagar reservas ao deletar conta
+    cursor.execute(
+        'UPDATE MOTOS SET RESERVADO = NULL, RESERVADO_EM = NULL, ID_USUARIO_RESERVA = NULL WHERE ID_USUARIO_RESERVA = ?',
+        (id,)
+    )
+
     cursor.close()
 
     return jsonify({

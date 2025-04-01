@@ -16,11 +16,133 @@ def remover_bearer(token):
 def get_car_image(id_carro, filename):
     return send_from_directory(os.path.join(app.root_path, 'upload', 'Carros', str(id_carro)), filename)
 
+
+@app.route('/cancelar-reserva-carro/<int:id>', methods=['DELETE'])
+def cancelar_reserva_carro(id):
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+
+    tipo_user = cursor.fetchone()[0]
+
+    try:
+        if tipo_user in [1, 2]:
+            cursor.execute('''
+                UPDATE CARROS SET RESERVADO = NULL, RESERVADO_EM = NULL, ID_USUARIO_RESERVA = NULL WHERE ID_CARRO =?
+                ''', (id,))
+        else:
+            cursor.execute('''
+                SELECT 1 FROM CARROS WHERE RESERVADO IS TRUE AND ID_CARRO =? AND ID_USUARIO_RESERVA = ?
+                ''', (id, id_usuario))
+            check = cursor.fetchone()
+            if check:
+                cursor.execute('''
+                   UPDATE CARROS SET RESERVADO = NULL, RESERVADO_EM = NULL, ID_USUARIO_RESERVA = NULL WHERE ID_CARRO =?
+                   ''', (id,))
+            else:
+                return jsonify({
+                    'error': 'Apenas o dono da reserva pode cancelá-la.'
+                }), 400
+    except Exception as e:
+        return jsonify({'error': e}), 400
+    finally:
+        con.commit()
+        cursor.close()
+        return jsonify({
+            'success': 'Reserva cancelada com sucesso!'
+        }), 200
+
 @app.route('/buscar-carro', methods=['POST'])
 def get_carro():
     data = request.get_json()
 
     idFiltro = data.get('id')
+
+    # Query base
+    query = '''
+           SELECT id_carro, marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria, 
+                  quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo 
+           FROM CARROS
+       '''
+
+    cursor = con.cursor()
+
+    token = request.headers.get('Authorization')
+    if token:
+        token = remover_bearer(token)
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+
+        cursor.execute("SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?", (id_usuario,))
+        tipo_user = cursor.fetchone()[0]
+
+        if tipo_user == 3:
+            cursor.execute(
+                'SELECT ID_USUARIO_RESERVA FROM CARROS WHERE RESERVADO IS TRUE AND ID_USUARIO_RESERVA = ? AND ID_CARRO = ?',
+                (id_usuario, idFiltro))
+        else:
+            cursor.execute('SELECT ID_USUARIO_RESERVA FROM CARROS WHERE RESERVADO IS TRUE AND ID_CARRO = ?', (idFiltro,))
+
+        usuario_reservou = cursor.fetchone()
+
+        if usuario_reservou:
+            cursor.execute(f'{query} WHERE ID_CARRO = ?', (idFiltro,))
+
+            carro = cursor.fetchone()
+
+            images_dir = os.path.join(app.root_path, upload_folder, 'Carros', str(idFiltro))
+            imagens = []
+
+            # Verifica se o diretório existe
+            if os.path.exists(images_dir):
+                for file in os.listdir(images_dir):
+                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                        imagem_url = url_for('get_car_image', id_carro=idFiltro, filename=file, _external=True)
+                        imagens.append(imagem_url)
+
+            dados_carro = {
+                'id': carro[0],
+                'marca': carro[1],
+                'modelo': carro[2],
+                'ano_modelo': carro[3],
+                'ano_fabricacao': carro[4],
+                'versao': carro[5],
+                'cor': carro[6],
+                'renavam': carro[7],
+                'cambio': carro[8],
+                'combustivel': carro[9],
+                'categoria': carro[10],
+                'quilometragem': carro[11],
+                'estado': carro[12],
+                'cidade': carro[13],
+                'preco_compra': carro[14],
+                'preco_venda': carro[15],
+                'licenciado': carro[16],
+                'placa': carro[17],
+                'criado_em': carro[18],
+                'ativo': carro[19],
+                'imagens': imagens
+            }
+
+            cursor.close()
+            return jsonify({
+                "reserva": True,
+                "veiculos": [dados_carro]
+            }), 200
+
     anoMaxFiltro = data.get('ano-max')
     anoMinFiltro = data.get('ano-min')
     categoriaFiltro = data.get('categoria')
@@ -31,12 +153,6 @@ def get_carro():
     precoMinFiltro = data.get('preco-min')
     coresFiltro = data.get('cores')  # Pode ser uma lista ou string
 
-    # Query base
-    query = '''
-        SELECT id_carro, marca, modelo, ano_modelo, ano_fabricacao, versao, cor, renavam, cambio, combustivel, categoria, 
-               quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, placa, criado_em, ativo 
-        FROM CARROS
-    '''
     conditions = []
     params = []
 
