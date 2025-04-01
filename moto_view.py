@@ -76,6 +76,7 @@ def get_moto():
         else:
             conditions.append("cor = ?")
             params.append(coresFiltro)
+
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
 

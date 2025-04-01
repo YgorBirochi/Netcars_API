@@ -455,6 +455,7 @@ def qnt_veiculos():
     cursor.execute('''
         SELECT COUNT(*) AS qnt_carros
         FROM CARROS
+        WHERE RESERVADO IS NULL
     ''')
 
     qnt_carros = cursor.fetchone()[0]
@@ -462,6 +463,7 @@ def qnt_veiculos():
     cursor.execute('''
         SELECT COUNT(*) AS qnt_motos
         FROM MOTOS
+        WHERE RESERVADO IS NULL
     ''')
 
     qnt_motos = cursor.fetchone()[0]
