@@ -28,6 +28,7 @@ from carro_view import *
 from moto_view import *
 from relatorios_view import *
 from esqueci_senha import *
+from buscar_reserva import *
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
