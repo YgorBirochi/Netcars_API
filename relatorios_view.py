@@ -4,108 +4,415 @@ from fpdf import FPDF
 from datetime import datetime
 import re
 
-# Formatção de informações
 
+# Funções de formatação
 def format_currency(value):
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
 
 def format_kilometragem(value):
     return f"{value:,} km".replace(",", ".")
 
+
 def format_phone(phone):
-    # Se não houver informação, retorna None
     if phone is None:
         return None
-    # Converte para string
     phone_str = str(phone)
-    # Remove tudo que não for dígito
-    digits = re.sub(r'\D', '', phone_str) 
-
+    digits = re.sub(r'\D', '', phone_str)
     if len(digits) == 11:
-        # Formata como (XX) XXXXX-XXXX
         return f"({digits[0:2]}) {digits[2:7]}-{digits[7:]}"
     elif len(digits) == 10:
-        # Formata como (XX) XXXX-XXXX
         return f"({digits[0:2]}) {digits[2:6]}-{digits[6:]}"
     else:
-        # Se não tiver 10 ou 11 dígitos, retorna o valor original
         return phone_str
+
 
 def format_cpf_cnpj(value):
     if value is None:
         return None
     value_str = str(value)
     digits = re.sub(r'\D', '', value_str)
-
     if len(digits) == 11:
-        # Formata como CPF: 000.000.000-00
         return f"{digits[:3]}.{digits[3:6]}.{digits[6:9]}-{digits[9:]}"
     elif len(digits) == 14:
-        # Formata como CNPJ: 00.000.000/0000-00
         return f"{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}"
     else:
-        # Se não estiver em um dos formatos, retorna o valor original
         return value_str
+
 
 def format_date(date_value):
     if date_value is None:
         return None
-    # Se já for um objeto datetime, formata diretamente
     if isinstance(date_value, datetime):
         return date_value.strftime('%d/%m/%Y')
     try:
-        # Tenta assumir que a string está no formato 'YYYY-MM-DD'
         dt = datetime.strptime(str(date_value), '%Y-%m-%d')
         return dt.strftime('%d/%m/%Y')
     except ValueError:
-        # Se não conseguir, retorna o valor convertido para string
         return str(date_value)
 
-# Fim das formatações
+# Fim das funções de formatação
 
-# Class para título de cada Página
-
+# Ínicio das Classes
 class CustomCarroPDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        self.set_title("Relatório de Carros")
+        self.set_author("Sistema de Concessionária")
+        self.primary_color = (56, 56, 56)  # Cinza
+        self.accent_color = (220, 50, 50)  # Vermelho para destaques
+
+
+        # Dimensões
+        self.card_height = 70   # Altura de cada card
+        self.card_margin_x = 7.5 # Margem lateral
+        self.card_width = 195  # Largura total do card
+        self.line_height = 5    # Altura da linha de texto
+        self.card_spacing = 15  # Espaço entre os cards
+        self.normal_font_size = 10
+        self.bold_font_size = 10
+
     def header(self):
-        self.set_font("Arial", "B", 16)
-        self.cell(0, 10, "Relação de Carros", ln=True, align='C')
-        self.ln(5)
-        self.line(10, self.get_y(), 200, self.get_y())
-        self.ln(5)
+        self.set_font("Arial", "B", 14)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, 10, "Relatório de Carros", 0, 1, "C")
+
+        self.set_font("Arial", "", 10)
+        self.cell(0, 6, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, "C")
+
+        self.ln(4)
+        self.set_line_width(0.5)
+        self.set_draw_color(*self.primary_color)
+        # Linha horizontal
+        self.line(10, 30, self.w - 10, 30)
+        self.ln(10)
 
     def footer(self):
         self.set_y(-15)
         self.set_font("Arial", "I", 10)
-        self.cell(0, 10, f"Página {self.page_no()}", align="C")
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
+
+    def create_car_cards(self, carros):
+        """Renderiza os cards de 3 em 3 por página com espaçamento"""
+        self.alias_nb_pages()
+        total_carros = len(carros)
+
+        for i, carro in enumerate(carros):
+            if i % 3 == 0:  # Nova página a cada 3 cards
+                self.add_page()
+                self.current_page_y = 40  # Posição inicial abaixo do cabeçalho
+
+            # Calcula a posição vertical com espaçamento
+            card_position = self.current_page_y + (i % 3) * (self.card_height + self.card_spacing)
+
+            self._draw_card(carro, card_position)
+
+            # Atualiza a posição Y máxima da página
+            if (i % 3 == 2) or (i == len(carros) - 1):
+                self.current_page_y = 0  # Reseta para próxima página
+
+        # Adiciona a contagem total de veículos abaixo do último card
+        ultimo_card_y = self.current_page_y + ((len(carros) - 1) % 3) * (self.card_height + self.card_spacing)  # Calcula a posição do último card
+        contador_y = ultimo_card_y + self.card_height + 45  # Define o espaço logo abaixo do último card
+
+        self.set_y(contador_y)
+        self.set_font("Arial", "B", 14)
+        self.cell(0, 10, f"Total de veículos: {total_carros}", ln=True, align="C")
+
+
+    def _draw_card(self, data, start_y):
+        """Desenha um card na posição vertical 'start_y'."""
+        # Fundo do card
+        self.set_fill_color(240, 240, 240)
+        self.rect(self.card_margin_x, start_y, self.card_width, self.card_height, "F")
+
+        # Cabeçalho do card: Marca + Modelo
+        self.set_xy(self.card_margin_x + 5, start_y + 5)
+        self.set_font("Arial", "B", 10)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, 6, f"{data[0]} {data[1]}", ln=1)
+
+        # Colunas
+        col1_x = self.card_margin_x + 5
+        col2_x = col1_x + 90  # ~90 px de distância da coluna 1
+        y_left = start_y + 14
+        y_right = start_y + 14
+
+        # Coluna esquerda
+        fields_left = [
+            ("Placa", data[2]),
+            ("Ano Modelo", data[3]),
+            ("Cor", data[5]),
+            ("Câmbio", data[7]),
+            ("Preço Compra", format_currency(data[13])),
+            ("Licenciado", "Sim" if data[15] == 1 else "Não")
+        ]
+        for label, value in fields_left:
+            self.set_xy(col1_x, y_left)
+            self.set_font("Arial", "", self.normal_font_size)
+            self.cell(30, self.line_height, f"{label}:", 0, 0)
+            self.set_font("Arial", "B", self.bold_font_size)
+            self.cell(50, self.line_height, str(value), 0, 0)
+            y_left += self.line_height + 1
+
+        # Coluna direita
+        fields_right = [
+            ("Ano Fabricação", data[4]),
+            ("Combustível", data[8]),
+            ("Quilometragem", format_kilometragem(data[10])),
+            ("Cidade/Estado", f"{data[12]}/{data[11]}"),
+            ("Preço Venda", format_currency(data[14]))
+        ]
+        for label, value in fields_right:
+            self.set_xy(col2_x, y_right)
+            self.set_font("Arial", "", self.normal_font_size)
+            self.cell(40, self.line_height, f"{label}:", 0, 0)
+            self.set_font("Arial", "B", self.bold_font_size)
+            self.cell(50, self.line_height, str(value), 0, 0)
+            y_right += self.line_height + 1
+
+        # Versão no rodapé do card
+        versao_y = start_y + self.card_height - 20
+        self.set_xy(col1_x, versao_y)
+        self.set_font("Arial", "", self.normal_font_size)
+        self.cell(30, self.line_height, "Versão:", 0, 0)
+        self.set_font("Arial", "B", self.bold_font_size)
+        self.cell(0, self.line_height, str(data[16]), 0, 0)
 
 class CustomMotosPDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        self.set_title("Relatório de Motos")
+        self.set_author("Sistema de Veículos")
+        self.primary_color = (56, 56, 56)  # Cinza
+        self.accent_color = (220, 50, 50)  # Vermelho para destaques
+
+        # Dimensões
+        self.card_height = 70
+        self.card_margin_x = 10
+        self.card_width = 190
+        self.line_height = 5
+        self.card_spacing = 15
+        self.normal_font_size = 10
+        self.bold_font_size = 10
+
     def header(self):
-        self.set_font("Arial", "B", 16)
-        self.cell(0, 10, "Relação de Motos", ln=True, align='C')
-        self.ln(5)
-        self.line(10, self.get_y(), 200, self.get_y())
-        self.ln(5)
+        self.set_font("Arial", "B", 14)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, 10, "Relatório de Motos", 0, 1, "C")
+
+        self.set_font("Arial", "", 10)
+        self.cell(0, 6, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, "C")
+
+        self.ln(4)
+        self.set_line_width(0.5)
+        self.set_draw_color(*self.primary_color)
+        # Linha horizontal
+        self.line(10, 30, self.w - 10, 30)
+        self.ln(10)
 
     def footer(self):
         self.set_y(-15)
         self.set_font("Arial", "I", 10)
-        self.cell(0, 10, f"Página {self.page_no()}", align="C")
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
+
+    def create_moto_cards(self, motos):
+        """Renderiza os cards de motos de forma semelhante aos carros."""
+        self.alias_nb_pages()
+        total_motos = len(motos)
+
+        for i, moto in enumerate(motos):
+            if i % 3 == 0:  # Nova página a cada 3 cards
+                self.add_page()
+                self.current_page_y = 40  # Posição inicial abaixo do cabeçalho
+
+            # Calcula a posição vertical com espaçamento
+            card_position = self.current_page_y + (i % 3) * (self.card_height + self.card_spacing)
+
+            self._draw_card(moto, card_position)
+
+            # Atualiza a posição Y máxima da página
+            if (i % 3 == 2) or (i == len(motos) - 1):
+                self.current_page_y = 0  # Reseta para próxima página
+
+        # Adiciona a contagem total de motos abaixo do último card
+        ultimo_card_y = self.current_page_y + ((len(motos) - 1) % 3) * (self.card_height + self.card_spacing)  # Calcula a posição do último card
+        contador_y = ultimo_card_y + self.card_height + 45  # Define o espaço logo abaixo do último card
+
+        self.set_y(contador_y)
+        self.set_font("Arial", "B", 14)
+        self.cell(0, 10, f"Total de motos: {total_motos}", ln=True, align="C")
+
+    def _draw_card(self, data, start_y):
+        """Desenha um card na posição vertical 'start_y'."""
+        # Fundo do card
+        self.set_fill_color(240, 240, 240)
+        self.rect(self.card_margin_x, start_y, self.card_width, self.card_height, "F")
+
+        # Cabeçalho do card: Marca + Modelo
+        self.set_xy(self.card_margin_x + 5, start_y + 5)
+        self.set_font("Arial", "B", 10)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, 6, f"{data[0]} {data[1]}", ln=1)
+
+        # Colunas
+        col1_x = self.card_margin_x + 5
+        col2_x = col1_x + 90  # ~90 px de distância da coluna 1
+        y_left = start_y + 14
+        y_right = start_y + 14
+
+        # Coluna esquerda
+        fields_left = [
+            ("Placa", data[2]),
+            ("Ano Modelo", data[3]),
+            ("Categoria", data[5]),
+            ("Cor", data[6]),
+            ("Marchas", data[8]),
+            ("Licenciado", "Sim" if data[19] == 1 else "Não")
+        ]
+        for label, value in fields_left:
+            self.set_xy(col1_x, y_left)
+            self.set_font("Arial", "", self.normal_font_size)
+            self.cell(30, self.line_height, f"{label}:", 0, 0)
+            self.set_font("Arial", "B", self.bold_font_size)
+            self.cell(50, self.line_height, str(value), 0, 0)
+            y_left += self.line_height + 1
+
+        # Coluna direita
+        fields_right = [
+            ("Ano Fabricação", data[4]),
+            ("Cilindradas", data[11]),
+            ("Quilometragem", format_kilometragem(data[17])),
+            ("Preço Compra", format_currency(data[18])),
+            ("Preço Venda", format_currency(data[19]))
+        ]
+        for label, value in fields_right:
+            self.set_xy(col2_x, y_right)
+            self.set_font("Arial", "", self.normal_font_size)
+            self.cell(40, self.line_height, f"{label}:", 0, 0)
+            self.set_font("Arial", "B", self.bold_font_size)
+            self.cell(50, self.line_height, str(value), 0, 0)
+            y_right += self.line_height + 1
+
 
 class CustomUsuarioPDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        self.set_title("Relatório de Usuários")
+        self.set_author("Sistema de Usuários")
+        self.primary_color = (56, 56, 56)  # Cinza
+        self.accent_color = (220, 50, 50)  # Vermelho para destaques
+
+        self.card_height = 50
+        self.card_margin_x = 10
+        self.card_width = 90
+        self.card_spacing_x = 10
+        self.card_spacing_y = 10
+        self.line_height = 5
+        self.normal_font_size = 10
+        self.bold_font_size = 10
+
     def header(self):
-        self.set_font("Arial", "B", 16)
-        self.cell(0, 10, "Relatório de Usuários", ln=True, align='C')
-        self.ln(5)
-        self.line(10, self.get_y(), 200, self.get_y())
-        self.ln(5)
+        # Cabeçalho
+        self.set_font("Arial", "B", 14)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, 10, "Relatório de Usuários", 0, 1, "C")
+
+        self.set_font("Arial", "", 10)
+        self.cell(0, 6, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, "C")
+
+        # Adicionando espaço antes da linha
+        self.ln(2)
+
+        # Linha horizontal abaixo do texto
+        self.set_line_width(0.5)
+        self.set_draw_color(*self.primary_color)
+        self.line(10, self.get_y() + 2, self.w - 10, self.get_y() + 2)
+
+        # Espaço após a linha para começar os cards
+        self.ln(8)
 
     def footer(self):
         self.set_y(-15)
         self.set_font("Arial", "I", 10)
-        self.cell(0, 10, f"Página {self.page_no()}", align="C")
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
 
+    def create_usuario_cards(self, usuarios):
+        """Renderiza os cards de usuários em uma grade de 2x4 (8 por página)."""
+        self.alias_nb_pages()
+        total_usuarios = len(usuarios)
 
-# Fim das Class
+        for i, usuario in enumerate(usuarios):
+            # Nova página a cada 8 cards
+            if i % 8 == 0:
+                self.add_page()
+                self.current_page_y = 35  # Posição inicial abaixo do cabeçalho
+
+            # Calcula a posição do card na grade 2x4
+            row = (i % 8) // 2  # 0, 0, 1, 1, 2, 2, 3, 3
+            col = (i % 2)  # 0, 1, 0, 1, 0, 1, 0, 1
+
+            # Calcula a posição X e Y do card
+            card_x = self.card_margin_x + col * (self.card_width + self.card_spacing_x)
+            card_y = self.current_page_y + row * (self.card_height + self.card_spacing_y)
+
+            self._draw_card(usuario, card_x, card_y)
+
+        # Adiciona a contagem total de usuários na última página
+        self.set_y(-30)  # 30 pontos acima do rodapé
+        self.set_font("Arial", "B", 14)
+        self.cell(0, 10, f"Total de usuários: {total_usuarios}", ln=True, align="C")
+
+    def _draw_card(self, data, start_x, start_y):
+        """Desenha um card na posição (start_x, start_y)."""
+        # Fundo do card
+        self.set_fill_color(240, 240, 240)
+        self.rect(start_x, start_y, self.card_width, self.card_height, "F")
+
+        # Cabeçalho do card: Nome
+        self.set_xy(start_x + 5, start_y + 5)
+        self.set_font("Arial", "B", 10)
+        self.set_text_color(*self.primary_color)
+        nome_truncado = self._truncate_text(data[0], self.card_width - 10, "Arial", "B", 10)
+        self.cell(self.card_width - 10, 6, nome_truncado, ln=1)
+
+        # Informações do usuário
+        y_pos = start_y + 14
+        fields = [
+            ("Email", self._truncate_text(data[1], self.card_width - 15, "Arial", "", 9)),
+            ("Telefone", format_phone(data[2])),
+            ("CPF/CNPJ", format_cpf_cnpj(data[3])),
+            ("Nascimento", format_date(data[4])),
+            ("Ativo", "Sim" if data[5] == 1 else "Não")
+        ]
+
+        for label, value in fields:
+            self.set_xy(start_x + 5, y_pos)
+            self.set_font("Arial", "", 9)
+            self.cell(30, self.line_height, f"{label}:", 0, 0)
+            self.set_xy(start_x + 35, y_pos)
+            self.set_font("Arial", "B", 9)
+            self.cell(self.card_width - 40, self.line_height, str(value), 0, 0)
+            y_pos += self.line_height + 1
+
+    def _truncate_text(self, text, max_width, font_family, font_style, font_size):
+        """Trunca o texto se ele exceder a largura máxima."""
+        self.set_font(font_family, font_style, font_size)
+        if self.get_string_width(text) <= max_width:
+            return text
+
+        # Trunca o texto
+        for i in range(len(text), 0, -1):
+            truncated = text[:i] + "..."
+            if self.get_string_width(truncated) <= max_width:
+                return truncated
+
+        return "..."
+
+# Fim das Classes
 
 # Início das Rotas
 
@@ -119,11 +426,9 @@ def criar_pdf_carro():
                       categoria, quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, versao 
                FROM carros WHERE 1=1"""
     params = []
-
     if marca:
-        query += " AND UPPER(MARCA) = UPPER(?)"
+        query += " AND UPPER(marca) = UPPER(?)"
         params.append(marca)
-
     if ano_fabricacao and ano_modelo:
         query += " AND ano_fabricacao = ? AND ano_modelo = ?"
         params.extend([ano_fabricacao, ano_modelo])
@@ -139,70 +444,16 @@ def criar_pdf_carro():
     carros = cursor.fetchall()
     cursor.close()
 
-    total_veiculos = len(carros)
     pdf = CustomCarroPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-
-    carros_por_pagina = 3
-    contador = 0
-
-    for carro in carros:
-        if contador == carros_por_pagina:
-            pdf.add_page()
-            contador = 0
-
-        campos = [
-            ("Marca", carro[0]),
-            ("Modelo", carro[1]),
-            ("Placa", carro[2]),
-            ("Ano Modelo", carro[3]),
-            ("Ano Fabricação", carro[4]),
-            ("Cor", carro[5]),
-            ("Renavam", carro[6]),
-            ("Câmbio", carro[7]),
-            ("Combustível", carro[8]),
-            ("Categoria", carro[9]),
-            ("Quilometragem", format_kilometragem(carro[10])),
-            ("Estado", carro[11]),
-            ("Cidade", carro[12]),
-            ("Preço Compra", format_currency(carro[13])),
-            ("Preço Venda", format_currency(carro[14])),
-            ("Licenciado", "Sim" if carro[15] == 1 else "Não"),
-            ("Versão", carro[16])
-        ]
-
-        for i in range(0, len(campos) - 1, 2):
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(35, 10, f"{campos[i][0]}:", border=0)
-            pdf.set_font("Arial", "", 12)
-            pdf.cell(40, 10, str(campos[i][1]), border=0)
-
-            if i + 1 < len(campos) - 1:
-                pdf.set_x(120)
-                pdf.set_font("Arial", "B", 12)
-                pdf.cell(35, 10, f"{campos[i + 1][0]}:", border=0)
-                pdf.set_font("Arial", "", 12)
-                pdf.cell(40, 10, str(campos[i + 1][1]), border=0)
-            pdf.ln(8)
-
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(35, 10, "Versão:", border=0)
-        pdf.set_font("Arial", "", 12)
-        pdf.multi_cell(0, 10, str(campos[-1][1]), border=0)
-
-        pdf.ln(5)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(5)
-
-        contador += 1
-
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, f"Total de carros: {total_veiculos}", ln=True, align="C")
-
+    pdf.create_car_cards(carros)  # Gera os cards dos carros e adiciona o total na última página
     pdf_path = "relatorio_carros.pdf"
     pdf.output(pdf_path)
-    return send_file(pdf_path, mimetype='application/pdf', as_attachment=False)
+    return send_file(
+        pdf_path,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=f"Relatorio_Carros_{datetime.now().strftime('%Y%m%d')}.pdf"
+    )
 
 @app.route('/relatorio/motos', methods=['GET'])
 def criar_pdf_moto():
@@ -210,6 +461,7 @@ def criar_pdf_moto():
     ano_fabricacao = request.args.get('ano_fabricacao')
     ano_modelo = request.args.get('ano_modelo')
 
+    # Removida a coluna "versao" da consulta, já que parece não existir na tabela motos
     query = """SELECT marca, modelo, placa, ano_modelo, ano_fabricacao, categoria, cor, renavam, 
                       marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, 
                       alimentacao, estado, cidade, quilometragem, preco_compra, preco_venda, licenciado 
@@ -217,7 +469,7 @@ def criar_pdf_moto():
     params = []
 
     if marca:
-        query += " AND UPPER(MARCA) = UPPER(?)"
+        query += " AND UPPER(marca) = UPPER(?)"
         params.append(marca)
 
     if ano_fabricacao and ano_modelo:
@@ -235,71 +487,24 @@ def criar_pdf_moto():
     motos = cursor.fetchall()
     cursor.close()
 
-    total_veiculos = len(motos)
+    # Vamos adicionar um valor padrão para o campo "versao" que está sendo usado no _draw_card
+    motos_com_versao = []
+    for moto in motos:
+        # Convertemos a tupla para lista, adicionamos o valor padrão de versão, e convertemos de volta para tupla
+        moto_lista = list(moto)
+        moto_lista.append("N/A")  # Adiciona um valor padrão para versão
+        motos_com_versao.append(tuple(moto_lista))
 
     pdf = CustomMotosPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-
-    motos_por_pagina = 2
-    contador = 0
-
-    for moto in motos:
-        if contador == motos_por_pagina:
-            pdf.add_page()
-            contador = 0
-
-        campos = [
-            ("Marca", moto[0]),
-            ("Modelo", moto[1]),
-            ("Placa", moto[2]),
-            ("Ano Modelo", moto[3]),
-            ("Ano Fabricação", moto[4]),
-            ("Categoria", moto[5]),
-            ("Cor", moto[6]),
-            ("Renavam", moto[7]),
-            ("Marchas", moto[8]),
-            ("Partida", moto[9]),
-            ("Tipo do Motor", moto[10]),
-            ("Cilindradas", moto[11]),
-            ("Freio D/T", moto[12]),
-            ("Refrigeração", moto[13]),
-            ("Alimentação", moto[14]),
-            ("Estado", moto[15]),
-            ("Cidade", moto[16]),
-            ("Quilometragem", format_kilometragem(moto[17])),
-            ("Preço Compra", format_currency(moto[18])),
-            ("Preço Venda", format_currency(moto[19])),
-            ("Licenciado", "Sim" if moto[20] == 1 else "Não")
-        ]
-
-        for i in range(0, len(campos), 2):
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(35, 10, f"{campos[i][0]}:", border=0)
-            pdf.set_font("Arial", "", 12)
-            pdf.cell(40, 10, str(campos[i][1]), border=0)
-
-            if i + 1 < len(campos):
-                pdf.set_x(120)
-                pdf.set_font("Arial", "B", 12)
-                pdf.cell(35, 10, f"{campos[i + 1][0]}:", border=0)
-                pdf.set_font("Arial", "", 12)
-                pdf.cell(40, 10, str(campos[i + 1][1]), border=0)
-            pdf.ln(8)
-
-        pdf.ln(5)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(5)
-
-        contador += 1
-
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, f"Total de motos: {total_veiculos}", ln=True, align="C")
-
+    pdf.create_moto_cards(motos_com_versao)  # Usa o método create_moto_cards com os dados ajustados
     pdf_path = "relatorio_motos.pdf"
     pdf.output(pdf_path)
-    return send_file(pdf_path, mimetype='application/pdf', as_attachment=False)
-
+    return send_file(
+        pdf_path,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=f"Relatorio_Motos_{datetime.now().strftime('%Y%m%d')}.pdf"
+    )
 
 @app.route('/relatorio/usuarios', methods=['GET'])
 def criar_pdf_usuarios():
@@ -361,57 +566,15 @@ def criar_pdf_usuarios():
     usuarios = cursor.fetchall()
     cursor.close()
 
-    total_usuarios = len(usuarios)
-
     pdf = CustomUsuarioPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.add_page()
-
-    usuarios_por_pagina = 7
-    contador = 0
-
-    for usuario in usuarios:
-        if contador == usuarios_por_pagina:
-            pdf.add_page()
-            contador = 0
-
-        # Campos retornados pelo SELECT:
-        # 0: nome_completo, 1: email, 2: telefone, 3: cpf_cnpj, 4: data_nascimento, 5: ativo
-        campos = [
-            ("Nome", usuario[0]),
-            ("Email", usuario[1]),
-            ("Telefone", format_phone(usuario[2])),
-            ("CPF/CNPJ", format_cpf_cnpj(usuario[3])),
-            ("Nascimento", format_date(usuario[4])),
-            ("Ativo", "Sim" if usuario[5] == 1 else "Não")
-        ]
-
-        # Exibe os campos com os labels próximos dos valores
-        for i in range(0, len(campos), 2):
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(30, 10, f"{campos[i][0]}:", border=0)
-            pdf.set_font("Arial", "", 12)
-            pdf.cell(45, 10, str(campos[i][1]), border=0)
-
-            if i + 1 < len(campos):
-                # Ajusta o offset para aproximar os dados dos labels
-                pdf.set_x(pdf.get_x() + 10)
-                pdf.set_font("Arial", "B", 12)
-                pdf.cell(30, 10, f"{campos[i + 1][0]}:", border=0)
-                pdf.set_font("Arial", "", 12)
-                pdf.cell(45, 10, str(campos[i + 1][1]), border=0)
-            pdf.ln(8)
-
-        pdf.ln(5)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(5)
-        contador += 1
-
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, f"Total de usuários: {total_usuarios}", ln=True, align="C")
-
+    pdf.create_usuario_cards(usuarios)  # Usa o método create_usuario_cards já implementado
     pdf_path = "relatorio_usuarios.pdf"
     pdf.output(pdf_path)
-    return send_file(pdf_path, mimetype='application/pdf', as_attachment=False)
+    return send_file(
+        pdf_path,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=f"Relatorio_Usuarios_{datetime.now().strftime('%Y%m%d')}.pdf"
+    )
 
 # Fim das Rotas
