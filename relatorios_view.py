@@ -6,6 +6,10 @@ import re
 
 
 # Funções de formatação
+
+def format_none(value):
+    return "Não informado" if value in [None, "none", "None"] else value
+
 def format_currency(value):
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
