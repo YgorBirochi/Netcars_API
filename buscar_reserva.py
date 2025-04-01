@@ -25,8 +25,11 @@ def buscar_dados_carro_por_id(id_carro):
     cursor.execute(query, (id_carro,))
     resultado = cursor.fetchone()
 
-    cursor.execute('SELECT NOME_COMPLETO FROM USUARIO WHERE ID_USUARIO = ?', (resultado[20],))
-    nome_usuario = cursor.fetchone()[0]
+    if resultado[20]:
+        cursor.execute('SELECT NOME_COMPLETO FROM USUARIO WHERE ID_USUARIO = ?', (resultado[20],))
+        nome_usuario = cursor.fetchone()[0]
+    else:
+        nome_usuario = None
 
     cursor.close()
 
@@ -80,8 +83,11 @@ def buscar_dados_moto_por_id(id_moto):
     cursor.execute(query, (id_moto,))
     resultado = cursor.fetchone()
 
-    cursor.execute('SELECT NOME_COMPLETO FROM USUARIO WHERE ID_USUARIO = ?', (resultado[23],))
-    nome_usuario = cursor.fetchone()[0]
+    if resultado[23]:
+        cursor.execute('SELECT NOME_COMPLETO FROM USUARIO WHERE ID_USUARIO = ?', (resultado[23],))
+        nome_usuario = cursor.fetchone()[0]
+    else:
+        nome_usuario = None
 
     cursor.close()
 
@@ -266,6 +272,15 @@ def reservar_veiculo():
     if not dados_user:
         return jsonify({'error': 'Cliente não encontrado.'}), 400
 
+    cursor.execute('SELECT 1 FROM CARROS WHERE ID_USUARIO_RESERVA = ?', (id_usuario,))
+    reserva_carro = cursor.fetchone()
+    
+    cursor.execute('SELECT 1 FROM MOTOS WHERE ID_USUARIO_RESERVA = ?', (id_usuario,))
+    reserva_moto = cursor.fetchone()
+
+    if reserva_carro or reserva_moto:
+        return jsonify({'error': 'Parece que você já possui um veículo reservado...'}), 400
+
     if dados_user[1] != 3:
         return jsonify({'error': 'Apenas clientes podem fazer reservas.'}), 400
 
@@ -327,7 +342,6 @@ def verificar_reserva():
     if motos:
         for moto in motos:
             id_moto, reservado_em = moto
-            # Atualiza se a reserva expirou
             if data_agora > reservado_em + timedelta(days=3):
                 cursor.execute(
                     'UPDATE MOTOS SET RESERVADO = NULL, RESERVADO_EM = NULL, ID_USUARIO_RESERVA = NULL WHERE ID_MOTO = ?',
@@ -335,5 +349,6 @@ def verificar_reserva():
                 )
                 qnt += 1
 
+    cursor.close()  # Fecha o cursor antes de chamar commit
     con.commit()
     return jsonify({'success': f'{qnt} veículo(s) verificado(s).'}), 200

@@ -22,6 +22,72 @@ def get_moto():
     data = request.get_json()
 
     idFiltro = data.get('id')
+
+    query = '''
+           SELECT id_moto, marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, 
+                  marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, 
+                  estado, cidade, quilometragem, preco_compra, preco_venda, placa, alimentacao, criado_em, ativo
+           FROM MOTOS
+       '''
+
+    token = request.headers.get('Authorization')
+    if token:
+        token = remover_bearer(token)
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+
+        cursor = con.cursor()
+
+        cursor.execute('SELECT 1 FROM MOTOS WHERE RESERVADO IS TRUE AND ID_USUARIO_RESERVA = ? AND ID_MOTO = ?', (id_usuario, idFiltro))
+
+        usuario_reservou = cursor.fetchone()
+
+        if usuario_reservou:
+            cursor.execute(f'{query} WHERE ID_MOTO = ?', (idFiltro,))
+
+            moto = cursor.fetchone()
+
+            images_dir = os.path.join(app.root_path, upload_folder, 'Motos', str(idFiltro))
+            imagens = []
+            if os.path.exists(images_dir):
+                for file in os.listdir(images_dir):
+                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                        imagem_url = url_for('get_moto_image', id_moto=idFiltro, filename=file, _external=True)
+                        imagens.append(imagem_url)
+
+            dados_moto = {
+                'id': moto[0],
+                'marca': moto[1],
+                'modelo': moto[2],
+                'ano_modelo': moto[3],
+                'ano_fabricacao': moto[4],
+                'categoria': moto[5],
+                'cor': moto[6],
+                'renavam': moto[7],
+                'marchas': moto[8],
+                'partida': moto[9],
+                'tipo_motor': moto[10],
+                'cilindrada': moto[11],
+                'freio_dianteiro_traseiro': moto[12],
+                'refrigeracao': moto[13],
+                'estado': moto[14],
+                'cidade': moto[15],
+                'quilometragem': moto[16],
+                'preco_compra': moto[17],
+                'preco_venda': moto[18],
+                'placa': moto[19],
+                'alimentacao': moto[20],
+                'criado_em': moto[21],
+                'ativo': moto[22],
+                'imagens': imagens
+            }
+
+            cursor.close()
+            return jsonify({
+                "reserva": True,
+                "veiculos": [dados_moto]
+            }), 200
+
     anoMaxFiltro = data.get('ano-max')
     anoMinFiltro = data.get('ano-min')
     categoriaFiltro = data.get('categoria')
@@ -32,12 +98,6 @@ def get_moto():
     precoMinFiltro = data.get('preco-min')
     coresFiltro = data.get('cores')  # pode ser lista ou string
 
-    query = '''
-        SELECT id_moto, marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, 
-               marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, 
-               estado, cidade, quilometragem, preco_compra, preco_venda, placa, alimentacao, criado_em, ativo
-        FROM MOTOS
-    '''
     conditions = []
     params = []
 
@@ -77,6 +137,8 @@ def get_moto():
             conditions.append("cor = ?")
             params.append(coresFiltro)
 
+    conditions.append('RESERVADO IS NOT TRUE')
+
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
 
@@ -86,6 +148,7 @@ def get_moto():
 
     lista_motos = []
     for moto in fetch:
+
         id_moto = moto[0]
         images_dir = os.path.join(app.root_path, upload_folder, 'Motos', str(id_moto))
         imagens = []
@@ -94,6 +157,7 @@ def get_moto():
                 if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
                     imagem_url = url_for('get_moto_image', id_moto=id_moto, filename=file, _external=True)
                     imagens.append(imagem_url)
+
         lista_motos.append({
             'id': moto[0],
             'marca': moto[1],

@@ -78,6 +78,8 @@ def get_carro():
             conditions.append("cor = ?")
             params.append(coresFiltro)
 
+    conditions.append('RESERVADO IS NOT TRUE')
+
     # Se houver condições, concatena à query base
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
