@@ -387,9 +387,9 @@ class CustomUsuarioPDF(FPDF):
         y_pos = start_y + 14
         fields = [
             ("Email", self._truncate_text(data[1], self.card_width - 15, "Arial", "", 9)),
-            ("Telefone", format_phone(data[2])),
-            ("CPF/CNPJ", format_cpf_cnpj(data[3])),
-            ("Nascimento", format_date(data[4])),
+            ("Telefone", format_none(format_phone(data[2]))),
+            ("CPF/CNPJ", format_none(format_cpf_cnpj(data[3]))),
+            ("Nascimento", format_none(format_date(data[4]))),
             ("Ativo", "Sim" if data[5] == 1 else "Não")
         ]
 
