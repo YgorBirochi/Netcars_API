@@ -53,6 +53,8 @@ def cancelar_reserva_carro(id):
                    UPDATE CARROS SET RESERVADO = NULL, RESERVADO_EM = NULL, ID_USUARIO_RESERVA = NULL WHERE ID_CARRO =?
                    ''', (id,))
             else:
+                con.commit()
+                cursor.close()
                 return jsonify({
                     'error': 'Apenas o dono da reserva pode cancelá-la.'
                 }), 400
@@ -270,11 +272,13 @@ def upload_img(id):
     cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
     user_type = cursor.fetchone()[0]
     if user_type not in [1, 2]:
+        cursor.close()
         return jsonify({'error': 'Acesso restrito a administradores'}), 403
 
     imagens = request.files.getlist('imagens')
 
     if not imagens:
+        cursor.close()
         return jsonify({
             'error': 'Dados incompletos',
             'missing_fields': 'Imagens'
@@ -292,6 +296,7 @@ def upload_img(id):
         imagem.save(imagem_path)
         saved_images.append(nome_imagem)
 
+    cursor.close()
     return jsonify({
         'success': "Imagens adicionadas!"
     }), 200
@@ -330,6 +335,7 @@ def add_carro():
     missing_fields = [field for field in required_fields if not data.get(field)]
 
     if missing_fields:
+        cursor.close()
         return jsonify({
             'error': f'Dados faltando: {missing_fields}'
         }), 400
@@ -354,11 +360,13 @@ def add_carro():
     ativo = 1
 
     if int(quilometragem) < 0:
+        cursor.close()
         return jsonify({
             'error': 'A quilometragem não pode ser negativa.'
         }), 400
 
     if float(preco_compra) < 0 or float(preco_venda) < 0:
+        cursor.close()
         return jsonify({
             'error': 'O preço não pode ser negativo.'
         }), 400
@@ -369,6 +377,7 @@ def add_carro():
     # Retornar caso já exista placa cadastrada
     cursor.execute("SELECT 1 FROM CARROS WHERE PLACA = ?", (placa,))
     if cursor.fetchone():
+        cursor.close()
         return jsonify({
             'error': 'Placa do veículo já cadastrada.'
         }), 409
@@ -376,16 +385,19 @@ def add_carro():
     # Retornar caso já exista RENAVAM cadastrado
     cursor.execute("SELECT 1 FROM CARROS WHERE RENAVAM = ?", (renavam,))
     if cursor.fetchone():
+        cursor.close()
         return jsonify({
             'error': 'Documento do veículo já cadastrado.'
         }), 409
 
     if (ano_fabricacao < ano_modelo):
+        cursor.close()
         return jsonify({
             'error': 'Ano de fabricação não pode ser anterior ao ano do modelo.'
         }), 400
 
     if (preco_venda < preco_compra):
+        cursor.close()
         return jsonify({
             'error': 'Preço de venda não pode ser menor ao preço de compra.'
         }), 400
@@ -450,6 +462,7 @@ def deletar_carro(id):
     cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
     user_type = cursor.fetchone()[0]
     if user_type not in [1,2]:
+        cursor.close()
         return jsonify({'error': 'Acesso restrito a administradores'}), 403
 
     cursor = con.cursor()
@@ -457,6 +470,7 @@ def deletar_carro(id):
     cursor.execute('SELECT 1 FROM CARROS WHERE ID_CARRO = ?', (id,))
 
     if not cursor.fetchone():
+        cursor.close()
         return jsonify({'error': 'Veículo não encontrado.'}), 404
 
     cursor.execute('DELETE FROM CARROS WHERE ID_CARRO = ?', (id,))
@@ -485,6 +499,7 @@ def editar_carro(id):
     # Verificando a existência do carro
     cursor.execute('SELECT 1 FROM CARROS WHERE ID_CARRO = ?', (id,))
     if not cursor.fetchone():
+        cursor.close()
         return jsonify({'error': 'Veículo não encontrado.'}), 404
 
     data = request.get_json()
@@ -506,7 +521,6 @@ def editar_carro(id):
         data_ant.append(item)
 
     for i in range(len(data_ant)):
-        print(fields[i])
         if data.get(fields[i]) == data_ant[i] or not data.get(fields[i]):
             data[fields[i]] = data_ant[i]
 
@@ -565,28 +579,27 @@ def editar_carro(id):
         }
     }), 200
 
-
 @app.route('/qnt_veiculos')
 def qnt_veiculos():
-    cursor = con.cursor()
+    # garante transação ativa
+    con.begin()
 
-    cursor.execute('''
-        SELECT COUNT(*) AS qnt_carros
-        FROM CARROS
-        WHERE RESERVADO IS NULL
+    cursor1 = con.cursor()
+    cursor1.execute('''
+        SELECT COUNT(*) FROM CARROS WHERE RESERVADO IS NULL
     ''')
+    qnt_carros = cursor1.fetchone()[0]
+    cursor1.close()
 
-    qnt_carros = cursor.fetchone()[0]
-
-    cursor.execute('''
-        SELECT COUNT(*) AS qnt_motos
-        FROM MOTOS
-        WHERE RESERVADO IS NULL
+    cursor2 = con.cursor()
+    cursor2.execute('''
+        SELECT COUNT(*) FROM MOTOS WHERE RESERVADO IS NULL
     ''')
+    qnt_motos = cursor2.fetchone()[0]
+    cursor2.close()
 
-    qnt_motos = cursor.fetchone()[0]
-
-    cursor.close()
+    # opcional: commit(retaining=True) se você quiser manter transação
+    con.commit(retaining=True)
 
     return jsonify({
         'qnt_carros': qnt_carros,
