@@ -293,6 +293,70 @@ def upload_img_moto(id):
         'success': "Imagens adicionadas!"
     }), 200
 
+
+@app.route('/moto/editar_img/<int:id>', methods=['PUT'])
+def editar_imagens_moto(id):
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+
+    cursor.close()
+    if user_type not in [1, 2]:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    # Obtém as imagens e filtra somente as que possuem um nome (arquivo válido)
+    imagens_brutas = request.files.getlist('imagens')
+    imagens = [img for img in imagens_brutas if img and img.filename]
+    if not imagens:
+        return jsonify({
+            'error': 'Dados incompletos',
+            'missing_fields': 'Imagens'
+        }), 400
+
+    if len(imagens) < 3:
+        return jsonify({
+            'error': 'É necessário enviar ao menos 3 imagens',
+        }), 400
+
+    # Define a pasta destino para as imagens do veículo
+    pasta_destino = os.path.join(upload_folder, "Motos", str(id))
+
+    # Se a pasta já existir, apaga-a para remover as imagens antigas
+    if os.path.exists(pasta_destino):
+        try:
+            shutil.rmtree(pasta_destino)
+        except Exception as e:
+            return jsonify({'error': f'Erro ao remover imagens antigas: {str(e)}'}), 500
+    else:
+        return jsonify({'error': 'Veículo não encontrado'}), 400
+
+    # Cria a pasta novamente para armazenar as novas imagens
+    os.makedirs(pasta_destino, exist_ok=True)
+
+    # Salva cada imagem na pasta, nomeando-as sequencialmente (1.jpeg, 2.jpeg, ...)
+    for index, imagem in enumerate(imagens, start=1):
+        nome_imagem = f"{index}.jpeg"
+        imagem_path = os.path.join(pasta_destino, nome_imagem)
+        try:
+            imagem.save(imagem_path)
+        except Exception as e:
+            return jsonify({'error': f'Erro ao salvar a imagem: {str(e)}'}), 500
+
+    return jsonify({'success': "Imagens atualizadas com sucesso!"}), 200
+
 # Adicionar nova moto (requer autenticação e acesso de administrador)
 @app.route('/moto', methods=['POST'])
 def add_moto():
