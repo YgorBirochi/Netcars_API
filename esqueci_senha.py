@@ -3,10 +3,11 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from threading import Thread
-from flask import Flask, request, jsonify
-from main import app, con, senha_app_email
+from flask import Flask, request, jsonify, url_for, send_from_directory
+from main import app, con, senha_app_email, upload_folder
 import random, re
 from flask_bcrypt import generate_password_hash, check_password_hash
+import os
 
 # -----------------------------
 # Funções Auxiliares (Banco e Senha)
@@ -23,31 +24,119 @@ def validar_senha(senha):
 # -----------------------------
 # Envio de E-mail de Recuperação de Senha (Assíncrono)
 # -----------------------------
+
 def enviar_email_recuperar_senha(email_destinatario, codigo):
     def task_envio():
         remetente = 'netcars.contato@gmail.com'
         senha = senha_app_email
         servidor_smtp = 'smtp.gmail.com'
-        porta_smtp = 587
+
+        # Usar SSL direto (porta 465) em vez de TLS (porta 587)
+        porta_smtp = 465
 
         assunto = 'NetCars - Código de Verificação'
-        corpo = f'O seu código de verificação é: {codigo}'
+        corpo = f"""
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>NetCars - Código de Verificação</title>
+            <style>
+              body {{
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f4;
+                margin: 0;
+                padding: 0;
+                color: #333;
+              }}
+              .container {{
+                max-width: 600px;
+                margin: 40px auto;
+                background-color: #fff;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                overflow: hidden;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+              }}
+              .header {{
+                background-color: #4CAF50;
+                padding: 20px;
+                text-align: center;
+                color: #fff;
+              }}
+              .header h1 {{
+                margin: 0;
+                font-size: 28px;
+              }}
+              .content {{
+                padding: 30px;
+              }}
+              .content p {{
+                line-height: 1.6;
+                margin-bottom: 20px;
+              }}
+              .codigo {{
+                text-align: center;
+                font-size: 32px;
+                font-weight: bold;
+                letter-spacing: 3px;
+                color: #4CAF50;
+                margin: 30px 0;
+              }}
+              .button {{
+                display: inline-block;
+                background-color: #4CAF50;
+                color: #fff;
+                padding: 10px 20px;
+                text-decoration: none;
+                border-radius: 4px;
+                transition: background-color 0.3s ease;
+              }}
+              .button:hover {{
+                background-color: #45a049;
+              }}
+              .footer {{
+                background-color: #f4f4f4;
+                text-align: center;
+                padding: 15px;
+                font-size: 12px;
+                color: #777;
+              }}
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>NetCars</h1>
+              </div>
+              <div class="content">
+                <p>Prezado(a) usuário(a),</p>
+                <p>Recebemos uma solicitação para a recuperação da senha da sua conta NetCars. Para garantir a segurança dos seus dados, solicitamos que utilize o código de verificação abaixo para confirmar sua identidade:</p>
+                <div class="codigo">{codigo}</div>
+                <p>Se você não solicitou a alteração de senha, por favor, desconsidere este e-mail. Em caso de dúvidas ou se precisar de suporte, nossa equipe está à disposição para auxiliá-lo(a).</p>
+              </div>
+              <div class="footer">
+                <p>&copy; {datetime.now().year} NetCars. Todos os direitos reservados.</p>
+              </div>
+            </div>
+          </body>
+        </html>
+        """
 
         msg = MIMEMultipart()
         msg['From'] = remetente
         msg['To'] = email_destinatario
         msg['Subject'] = assunto
-        msg.attach(MIMEText(corpo, 'plain'))
+        msg.attach(MIMEText(corpo, 'html'))
 
         try:
-            server = smtplib.SMTP(servidor_smtp, porta_smtp, timeout=10)
-            # Opcional: server.set_debuglevel(1)
-            server.starttls()
+            # Usando SSL direto (mais confiável com Gmail)
+            server = smtplib.SMTP_SSL(servidor_smtp, porta_smtp, timeout=30)
+            server.set_debuglevel(1)  # Ative para debugging
+            server.ehlo()  # Identifica-se ao servidor
             server.login(remetente, senha)
             text = msg.as_string()
             server.sendmail(remetente, email_destinatario, text)
             server.quit()
-            print(f"E-mail de recuperação enviado para {email_destinatario}")
         except Exception as e:
             print(f"Erro ao enviar e-mail de recuperação: {e}")
 
