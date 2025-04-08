@@ -8,6 +8,7 @@ import jwt
 from main import app, con, senha_app_email, senha_secreta, upload_folder
 import os
 
+
 def remover_bearer(token):
     if token.startswith('Bearer '):
         return token[len('Bearer '):]
