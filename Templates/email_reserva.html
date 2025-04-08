@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>NetCars - Confirmação de Reserva</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 40px auto;
+            background-color: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background-color: #6C1DE9;
+            padding: 25px 20px;
+            color: #fff;
+        }
+
+        .header h1 {
+            width: 100%;
+            text-align: center;
+            font-size: 30px;
+            font-style: italic;
+        }
+
+        .header-subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            margin-top: 5px;
+            font-size: 16px;
+        }
+
+        .content {
+            padding: 35px 40px;
+            border: 1px solid #eaeaea;
+        }
+
+        .content p {
+            line-height: 1.7;
+            margin-bottom: 22px;
+            font-size: 15px;
+            color: #444;
+        }
+
+        .greeting {
+            font-size: 20px;
+            color: #222;
+            margin-bottom: 25px;
+            font-weight: 500;
+        }
+
+        .verification-box {
+            background-color: #f7f5fe;
+            border-left: 4px solid #6C1DE9;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+            border-radius: 4px;
+        }
+
+        .verification-title {
+            color: #6C1DE9;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .veiculo-info {
+            font-size: 16px;
+            color: #444;
+            text-align: left;
+            padding: 12px 20px;
+            background-color: #fff;
+            border-radius: 6px;
+            border: 1px solid #e2d7f7;
+            box-shadow: 0 2px 6px rgba(108, 29, 233, 0.1);
+        }
+
+        .veiculo-info ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .veiculo-info li {
+            padding: 8px 0;
+            border-bottom: 1px solid #f0e9fb;
+        }
+
+        .veiculo-info li:last-child {
+            border-bottom: none;
+        }
+
+        .veiculo-info strong {
+            color: #6C1DE9;
+        }
+
+        .prazo-box {
+            background-color: #f7f5fe;
+            border-left: 4px solid #6C1DE9;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+            border-radius: 4px;
+        }
+
+        .prazo-title {
+            color: #6C1DE9;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .prazo-data {
+            display: inline-block;
+            font-size: 24px;
+            font-weight: bold;
+            color: #6C1DE9;
+            padding: 12px 20px;
+            background-color: #fff;
+            border-radius: 6px;
+            border: 1px solid #e2d7f7;
+            box-shadow: 0 2px 6px rgba(108, 29, 233, 0.1);
+        }
+
+        .endereco-box {
+            background-color: #f7f5fe;
+            border-left: 4px solid #6C1DE9;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+            border-radius: 4px;
+        }
+
+        .endereco-title {
+            color: #6C1DE9;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .endereco {
+            display: inline-block;
+            font-size: 16px;
+            color: #444;
+            padding: 12px 20px;
+            background-color: #fff;
+            border-radius: 6px;
+            border: 1px solid #e2d7f7;
+            box-shadow: 0 2px 6px rgba(108, 29, 233, 0.1);
+        }
+
+        .help-section {
+            display: flex;
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 25px;
+        }
+
+        .help-section p {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .contact-button {
+            display: inline-block;
+            background-color: #6C1DE9;
+            color: #fff;
+            padding: 12px 25px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-top: 5px;
+        }
+
+        .contact-button:hover {
+            background-color: #5a18c0;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(108, 29, 233, 0.2);
+        }
+
+        .footer {
+            background-color: #f7f5fe;
+            text-align: center;
+            padding: 20px;
+            font-size: 13px;
+            color: #777;
+        }
+
+        .social-links {
+            margin-bottom: 15px;
+        }
+
+        .social-icon {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            text-align: center;
+            background-color: #6C1DE9;
+            color: white;
+            border-radius: 50%;
+            margin: 0 5px;
+            font-size: 14px;
+            text-decoration: none;
+        }
+
+        .footer-links {
+            margin-top: 10px;
+        }
+
+        .footer-links a {
+            color: #6C1DE9;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+
+        .notice {
+            font-size: 12px;
+            color: #999;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><span style="color: black;">NET</span>CARS</h1>
+        </div>
+        <div class="content">
+            <p class="greeting">Olá, prezado(a) cliente!</p>
+
+            <p>Temos o prazer de confirmar que sua <strong>reserva de {{ tipo_veiculo }}</strong> foi realizada com sucesso. Abaixo estão os dados do veículo reservado:</p>
+
+            <div class="verification-box">
+                <div class="verification-title">DADOS DO VEÍCULO</div>
+                <div class="veiculo-info">
+                    <ul>
+                        <li><strong>Marca:</strong> {{ dados_veiculo.marca }}</li>
+                        <li><strong>Modelo:</strong> {{ dados_veiculo.modelo }}</li>
+                        <li><strong>Preço de Venda:</strong> R$ {{ "{:,.2f}".format(dados_veiculo.preco_venda).replace(",", "TEMP").replace(".", ",").replace("TEMP", ".") }}</li>
+                        <li><strong>Ano Modelo:</strong> {{ dados_veiculo.ano_modelo }}</li>
+                        <li><strong>Ano Fabricação:</strong> {{ dados_veiculo.ano_fabricacao }}</li>
+                        <li><strong>Cor:</strong> {{ dados_veiculo.cor }}</li>
+                    </ul>
+                </div>
+            </div>
+
+            <p>Para finalizar sua compra, você precisa comparecer à nossa concessionária dentro do prazo estabelecido:</p>
+
+            <div class="prazo-box">
+                <div class="prazo-title">DATA LIMITE PARA COMPARECIMENTO</div>
+                <div class="prazo-data">{{ data_limite_str }}</div>
+            </div>
+
+            <div class="endereco-box">
+                <div class="endereco-title">ENDEREÇO DA CONCESSIONÁRIA</div>
+                <div class="endereco">{{ endereco_concessionaria }}</div>
+            </div>
+
+            <p>Caso tenha qualquer dúvida ou precise reagendar, entre em contato com nosso atendimento. Estamos ansiosos para recebê-lo(a) em nossa concessionária!</p>
+        </div>
+        <div class="footer">
+            <p>&copy; {{ ano }} NetCars. Todos os direitos reservados.</p>
+            <div class="footer-links">
+                <a href="#">Termos de Uso</a>
+                <a href="#">Política de Privacidade</a>
+                <a href="#">Ajuda</a>
+            </div>
+            <p class="notice">Este é um e-mail automático, por favor não responda.</p>
+        </div>
+    </div>
+</body>
+</html>

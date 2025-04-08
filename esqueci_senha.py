@@ -26,7 +26,7 @@ def validar_senha(senha):
 # -----------------------------
 
 def enviar_email_recuperar_senha(email_destinatario, codigo):
-    # Captura o objeto da aplicação para criar o contexto posteriormente
+
     app_context = current_app._get_current_object()
 
     def task_envio():

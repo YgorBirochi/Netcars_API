@@ -3,7 +3,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from threading import Thread
-from flask import Flask, request, jsonify, url_for
+from flask import Flask, request, jsonify, url_for, render_template, current_app
 import jwt
 from main import app, con, senha_app_email, senha_secreta, upload_folder
 import os
@@ -132,66 +132,6 @@ def buscar_dados_moto_por_id(id_moto):
 # -----------------------------
 # Envio de E-mail de Reserva (Assíncrono)
 # -----------------------------
-def enviar_email_reserva(email_destinatario, tipo_veiculo, dados_veiculo):
-    def task_envio():
-        remetente = 'netcars.contato@gmail.com'
-        senha = senha_app_email
-        servidor_smtp = 'smtp.gmail.com'
-        porta_smtp = 587
-
-        # Calcular data limite para comparecimento (3 dias a partir de hoje)
-        data_envio = datetime.now()
-        data_limite = data_envio + timedelta(days=3)
-        data_limite_str = data_limite.strftime("%d/%m/%Y")
-
-        # Endereço fictício da concessionária
-        endereco_concessionaria = "Av. Exemplo, 1234 - Centro, Cidade Fictícia"
-
-        # Montar o corpo do e-mail
-        assunto = "NetCars - Confirmação de Reserva"
-        corpo_email = f"""Prezado(a) Cliente,
-
-Sua reserva de {tipo_veiculo} foi confirmada com sucesso!
-
-Dados do veículo:
-- Marca: {dados_veiculo['marca']}
-- Modelo: {dados_veiculo['modelo']}
-- Preço de Venda: R$ {dados_veiculo['preco_venda']:.2f}
-- Ano Modelo: {dados_veiculo['ano_modelo']}
-- Ano Fabricação: {dados_veiculo['ano_fabricacao']}
-- Cor: {dados_veiculo['cor']}
-
-Você tem até o dia {data_limite_str} para comparecer à nossa concessionária para finalizar sua compra:
-
-Endereço: {endereco_concessionaria}
-
-Aguardamos a sua visita!
-
-Atenciosamente,
-Equipe NetCars
-"""
-        # Configurando o cabeçalho do e-mail
-        msg = MIMEMultipart()
-        msg['From'] = remetente
-        msg['To'] = email_destinatario
-        msg['Subject'] = assunto
-        msg.attach(MIMEText(corpo_email, 'plain'))
-
-        try:
-            server = smtplib.SMTP(servidor_smtp, porta_smtp, timeout=10)
-            # Opcional: Ative o debug se necessário: server.set_debuglevel(1)
-            server.starttls()
-            server.login(remetente, senha)
-            text = msg.as_string()
-            server.sendmail(remetente, email_destinatario, text)
-            server.quit()
-            print(f"E-mail de reserva enviado para {email_destinatario}")
-        except Exception as e:
-            print(f"Erro ao enviar e-mail de reserva: {e}")
-
-    # Inicia a thread para envio assíncrono
-    Thread(target=task_envio, daemon=True).start()
-
 @app.route('/buscar_reservas', methods=['GET'])
 def buscar_reserva():
     token = request.headers.get('Authorization')
@@ -244,6 +184,63 @@ def buscar_reserva():
         'motos': dadosMoto
     })
 
+def enviar_email_reserva(email_destinatario, tipo_veiculo, dados_veiculo):
+    app_context = current_app._get_current_object()
+
+    def task_envio():
+        try:
+            remetente = 'netcars.contato@gmail.com'
+            senha = senha_app_email  # Certifique-se de que essa variável está definida em algum lugar
+            servidor_smtp = 'smtp.gmail.com'
+            porta_smtp = 465
+
+            # Calcular data limite para comparecimento (3 dias a partir de hoje)
+            data_envio = datetime.now()
+            data_limite = data_envio + timedelta(days=3)
+            data_limite_str = data_limite.strftime("%d/%m/%Y")
+
+            # Endereço fictício da concessionária
+            endereco_concessionaria = "Av. Exemplo, 1234 - Centro, Cidade Fictícia"
+
+            # Montar o corpo do e-mail
+            assunto = "NetCars - Confirmação de Reserva"
+
+            with app_context.app_context():
+                corpo_email = render_template(
+                    'email_reserva.html',
+                    email_destinatario=email_destinatario,
+                    tipo_veiculo=tipo_veiculo,
+                    dados_veiculo=dados_veiculo,
+                    data_limite_str=data_limite_str,
+                    endereco_concessionaria=endereco_concessionaria,
+                    ano=datetime.now().year
+                )
+
+            # Configurando o cabeçalho do e-mail
+            msg = MIMEMultipart()
+            msg['From'] = remetente
+            msg['To'] = email_destinatario
+            msg['Subject'] = assunto
+            msg.attach(MIMEText(corpo_email, 'html'))
+
+            try:
+                # Usando SSL direto (mais confiável com Gmail)
+                server = smtplib.SMTP_SSL(servidor_smtp, porta_smtp, timeout=60)
+                server.set_debuglevel(1)  # Ative para debugging
+                server.ehlo()  # Identifica-se ao servidor
+                server.login(remetente, senha)
+                text = msg.as_string()
+                server.sendmail(remetente, email_destinatario, text)
+                server.quit()
+                print(f"E-mail de confirmação de reserva enviado para {email_destinatario}")
+            except Exception as e:
+                print(f"Erro ao enviar e-mail de reserva: {e}")
+
+        except Exception as e:
+            print(f"Erro na tarefa de envio do e-mail: {e}")
+
+    Thread(target=task_envio, daemon=True).start()
+
 @app.route('/reservar_veiculo', methods=["POST"])
 def reservar_veiculo():
     token = request.headers.get('Authorization')
@@ -274,7 +271,7 @@ def reservar_veiculo():
 
     cursor.execute('SELECT 1 FROM CARROS WHERE ID_USUARIO_RESERVA = ?', (id_usuario,))
     reserva_carro = cursor.fetchone()
-    
+
     cursor.execute('SELECT 1 FROM MOTOS WHERE ID_USUARIO_RESERVA = ?', (id_usuario,))
     reserva_moto = cursor.fetchone()
 
