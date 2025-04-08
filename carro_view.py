@@ -154,6 +154,7 @@ def get_carro():
     precoMax = data.get('preco-max')
     precoMinFiltro = data.get('preco-min')
     coresFiltro = data.get('cores')  # Pode ser uma lista ou string
+    nomeCarro = data.get('nome-veic')
 
     conditions = []
     params = []
@@ -195,6 +196,11 @@ def get_carro():
         else:
             conditions.append("cor = ?")
             params.append(coresFiltro)
+    if nomeCarro:
+        nomeCarro = nomeCarro.lower()
+        conditions.append('(LOWER(MARCA) LIKE ? OR LOWER(MODELO) LIKE ?)')
+        params.append(f"%{nomeCarro}%")
+        params.append(f"%{nomeCarro}%")
 
     conditions.append('RESERVADO IS NOT TRUE')
 
@@ -641,31 +647,4 @@ def editar_carro(id):
             'placa': placa,
             'ativo': ativo
         }
-    }), 200
-
-@app.route('/qnt_veiculos')
-def qnt_veiculos():
-    # garante transação ativa
-    con.begin()
-
-    cursor1 = con.cursor()
-    cursor1.execute('''
-        SELECT COUNT(*) FROM CARROS WHERE RESERVADO IS NULL
-    ''')
-    qnt_carros = cursor1.fetchone()[0]
-    cursor1.close()
-
-    cursor2 = con.cursor()
-    cursor2.execute('''
-        SELECT COUNT(*) FROM MOTOS WHERE RESERVADO IS NULL
-    ''')
-    qnt_motos = cursor2.fetchone()[0]
-    cursor2.close()
-
-    # opcional: commit(retaining=True) se você quiser manter transação
-    con.commit(retaining=True)
-
-    return jsonify({
-        'qnt_carros': qnt_carros,
-        'qnt_motos': qnt_motos
     }), 200
