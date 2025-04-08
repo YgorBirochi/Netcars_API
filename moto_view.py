@@ -153,6 +153,7 @@ def get_moto():
     precoMax = data.get('preco-max')
     precoMinFiltro = data.get('preco-min')
     coresFiltro = data.get('cores')  # pode ser lista ou string
+    nomeMoto = data.get('nome-veic')
 
     conditions = []
     params = []
@@ -192,6 +193,11 @@ def get_moto():
         else:
             conditions.append("cor = ?")
             params.append(coresFiltro)
+    if nomeMoto:
+        nomeMoto = nomeMoto.lower()
+        conditions.append('(LOWER(MARCA) LIKE ? OR LOWER(MODELO) LIKE ?)')
+        params.append(f"%{nomeMoto}%")
+        params.append(f"%{nomeMoto}%")
 
     conditions.append('RESERVADO IS NOT TRUE')
 
