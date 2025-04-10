@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request, send_from_directory, url_for
 from main import app, con, upload_folder, senha_secreta
 from datetime import datetime
 import pytz
-import os, uuid
+import os
 import jwt
 import shutil
 
@@ -12,10 +12,12 @@ def remover_bearer(token):
     else:
         return token
 
+# Rota para servir as imagens de motos
 @app.route('/uploads/carros/<int:id_carro>/<filename>')
 def get_car_image(id_carro, filename):
     return send_from_directory(os.path.join(app.root_path, 'upload', 'Carros', str(id_carro)), filename)
 
+# Cancelar reserva
 
 @app.route('/cancelar-reserva-carro/<int:id>', methods=['DELETE'])
 def cancelar_reserva_carro(id):
@@ -66,6 +68,8 @@ def cancelar_reserva_carro(id):
         return jsonify({
             'success': 'Reserva cancelada com sucesso!'
         }), 200
+
+# Buscar carro
 
 @app.route('/buscar-carro', methods=['POST'])
 def get_carro():
@@ -277,6 +281,7 @@ def upload_img(id):
 
     cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
     user_type = cursor.fetchone()[0]
+
     if user_type not in [1, 2]:
         cursor.close()
         return jsonify({'error': 'Acesso restrito a administradores'}), 403
@@ -324,6 +329,7 @@ def editar_imagens(id):
         return jsonify({'error': 'Token inválido'}), 401
 
     cursor = con.cursor()
+
     cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
     user_type = cursor.fetchone()[0]
 

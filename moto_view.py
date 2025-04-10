@@ -1,9 +1,10 @@
-from flask import Flask, jsonify, request, url_for, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, url_for
 from main import app, con, upload_folder, senha_secreta
 from datetime import datetime
 import pytz
-import os, uuid, shutil
+import os
 import jwt
+import shutil
 
 def remover_bearer(token):
     if token.startswith('Bearer '):
@@ -65,6 +66,8 @@ def cancelar_reserva_moto(id):
         return jsonify({
             'success': 'Reserva cancelada com sucesso!'
         }), 200
+
+# Buscar moto
 
 @app.route('/buscar-moto', methods=['POST'])
 def get_moto():
@@ -316,6 +319,7 @@ def editar_imagens_moto(id):
         return jsonify({'error': 'Token inválido'}), 401
 
     cursor = con.cursor()
+
     cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
     user_type = cursor.fetchone()[0]
 
@@ -560,10 +564,13 @@ def editar_moto(id):
         SELECT marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, 
                marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, 
                refrigeracao, estado, cidade, quilometragem, preco_compra, preco_venda, 
-               placa, alimentacao, criado_em, ativo, licenciado
+               placa, alimentacao, ativo, licenciado
         FROM MOTOS WHERE ID_MOTO = ?
     ''', (id,))
-    data_ant = list(cursor.fetchone())
+
+    data_ant = []
+    for item in cursor.fetchone():
+        data_ant.append(item)
 
     for i in range(len(data_ant)):
         if data.get(fields[i]) == data_ant[i] or not data.get(fields[i]):
@@ -589,20 +596,21 @@ def editar_moto(id):
     preco_venda = data.get('preco_venda')
     placa = data.get('placa').upper()
     alimentacao = data.get('alimentacao')
-    ativo = data.get('ativo')
-    criado_em = data.get('criado_em')
     licenciado = data.get('licenciado')
+
+    ativo = data.get('ativo')
 
     cursor.execute('''
         UPDATE MOTOS
         SET marca = ?, modelo = ?, ano_modelo = ?, ano_fabricacao = ?, categoria = ?, cor = ?, 
             renavam = ?, marchas = ?, partida = ?, tipo_motor = ?, cilindrada = ?, 
             freio_dianteiro_traseiro = ?, refrigeracao = ?, estado = ?, cidade = ?, quilometragem = ?, 
-            preco_compra = ?, preco_venda = ?, placa = ?, criado_em = ?, ativo = ?, alimentacao = ?, licenciado = ?
+            preco_compra = ?, preco_venda = ?, placa = ?, ativo = ?, alimentacao = ?, licenciado = ?
         WHERE ID_MOTO = ?
     ''', (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida,
           tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, estado, cidade,
-          quilometragem, preco_compra, preco_venda, placa, criado_em, ativo, alimentacao, licenciado, id))
+          quilometragem, preco_compra, preco_venda, placa, ativo, alimentacao, licenciado, id))
+
     con.commit()
     cursor.close()
 
@@ -629,7 +637,6 @@ def editar_moto(id):
             'preco_venda': preco_venda,
             'placa': placa,
             'alimentacao': alimentacao,
-            'criado_em': criado_em,
             'ativo': ativo,
             'licenciado': licenciado
         }
