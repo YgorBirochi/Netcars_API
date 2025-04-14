@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>NetCars - Pagamento via PIX</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 40px auto;
+            background-color: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #6C1DE9;
+            padding: 25px 20px;
+            color: #fff;
+        }
+
+        .header h1 {
+            width: 100%;
+            text-align: center;
+            font-size: 30px;
+            font-style: italic;
+        }
+
+        .content {
+            padding: 35px 40px;
+            border: 1px solid #eaeaea;
+        }
+
+        .greeting {
+            font-size: 20px;
+            color: #222;
+            margin-bottom: 25px;
+            font-weight: 500;
+        }
+
+        .instruction {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: #444;
+        }
+
+        .pix-section {
+            background-color: #f7f5fe;
+            border-left: 4px solid #6C1DE9;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+            border-radius: 4px;
+        }
+
+        .pix-title {
+            color: #6C1DE9;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .qrcode {
+            margin: 20px 0;
+        }
+
+        .qrcode img {
+            max-width: 200px;
+            height: auto;
+        }
+
+        .payment-info {
+            font-size: 16px;
+            color: #444;
+        }
+
+        .data-box {
+            background-color: #f7f5fe;
+            border-left: 4px solid #6C1DE9;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+            border-radius: 4px;
+        }
+
+        .data-title {
+            color: #6C1DE9;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .data-info {
+            display: inline-block;
+            font-size: 24px;
+            font-weight: bold;
+            color: #6C1DE9;
+            padding: 12px 20px;
+            background-color: #fff;
+            border-radius: 6px;
+            border: 1px solid #bce1d8;
+            box-shadow: 0 2px 6px rgba(0, 127, 95, 0.1);
+        }
+
+        .endereco-box {
+            background-color: #f7f5fe;
+            border-left: 4px solid #6C1DE9;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+            border-radius: 4px;
+        }
+
+        .endereco-title {
+            color: #6C1DE9;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .endereco {
+            display: inline-block;
+            font-size: 16px;
+            color: #444;
+            padding: 12px 20px;
+            background-color: #fff;
+            border-radius: 6px;
+            border: 1px solid #bce1d8;
+            box-shadow: 0 2px 6px rgba(0, 127, 95, 0.1);
+        }
+
+        .footer {
+            background-color: #f7f5fe;
+            text-align: center;
+            padding: 20px;
+            font-size: 13px;
+            color: #777;
+        }
+
+        .footer-links {
+            margin-top: 10px;
+        }
+
+        .footer-links a {
+            color: #6C1DE9;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+
+        .notice {
+            font-size: 12px;
+            color: #999;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><span style="color: black;">NET</span>CARS</h1>
+        </div>
+        <div class="content">
+            <p class="greeting">Olá, {{ nome_usuario }}!</p>
+            <p class="instruction">Obrigado por escolher a NetCars. Para confirmar sua reserva, realize o pagamento via PIX até <strong>{{ data_limite_str }}</strong>.</p>
+
+            <div class="pix-section">
+                <div class="pix-title">ESCANEIE O QR CODE ABAIXO</div>
+                <div class="qrcode">
+                    <img src="{{ dados_user.qrcode_url }}" alt="QR Code para pagamento PIX">
+                </div>
+                <div class="payment-info">
+                    Ou copie o código PIX: <br>
+                    <strong>{{ payload_completo }}</strong>
+                </div>
+            </div>
+
+            <div class="endereco-box">
+                <div class="endereco-title">NOSSO ENDEREÇO</div>
+                <div class="endereco">{{ endereco_concessionaria }}</div>
+            </div>
+            <p class="instruction">Qualquer dúvida, entre em contato conosco. Agradecemos a preferência!</p>
+        </div>
+        <div class="footer">
+            <p>&copy; {{ ano }} NetCars. Todos os direitos reservados.</p>
+            <div class="footer-links">
+                <a href="#">Termos de Uso</a>
+                <a href="#">Política de Privacidade</a>
+                <a href="#">Ajuda</a>
+            </div>
+            <p class="notice">Este é um e-mail automático, por favor, não responda.</p>
+        </div>
+    </div>
+</body>
+</html>

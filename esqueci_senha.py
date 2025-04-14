@@ -38,7 +38,7 @@ def enviar_email_recuperar_senha(email_destinatario, codigo):
 
         # Renderiza o template com as variáveis desejadas dentro do contexto da aplicação
         with app_context.app_context():
-            corpo = render_template('email.html', codigo=codigo, ano=datetime.now().year)
+            corpo = render_template('email_esqueci_senha.html.html', codigo=codigo, ano=datetime.now().year)
 
         # Cria e configura a mensagem do e-mail
         msg = MIMEMultipart()

@@ -1,15 +1,82 @@
-from flask import Flask, send_file, jsonify, request
-import qrcode
+from flask import Flask, send_file, jsonify, request, current_app, render_template
 from qrcode.constants import ERROR_CORRECT_H
+from main import app, con, senha_app_email, senha_secreta
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from threading import Thread
 from io import BytesIO
-import crcmod
-from datetime import datetime
-from main import app, con
-import os
+from datetime import datetime, timedelta
 from PIL import Image
-import barcode
-from barcode.writer import ImageWriter
+import os
+import crcmod
+import qrcode
+import smtplib
+import jwt
+import requests
 
+
+def remover_bearer(token):
+    if token.startswith('Bearer '):
+        return token[len('Bearer '):]
+    else:
+        return token
+
+def enviar_email_qrcode(email_destinatario, dados_user, nome_usuario, payload_completo):
+    app_context = current_app._get_current_object()
+
+    def task_envio():
+        try:
+            remetente = 'netcars.contato@gmail.com'
+            senha = senha_app_email
+            servidor_smtp = 'smtp.gmail.com'
+            porta_smtp = 465
+
+            # Calcular data limite para pagamento
+            data_envio = datetime.now()
+            data_limite = data_envio + timedelta(days=1)
+            data_limite_str = data_limite.strftime("%d/%m/%Y")
+
+            endereco_concessionaria = "Av. Exemplo, 1234 - Centro, Cidade Fictícia"
+
+            # Montar o corpo do e-mail
+            assunto = "NetCars - Confirmação de Pagamento"
+
+            with app_context.app_context():
+                corpo_email = render_template(
+                    'email_pix.html',
+                    nome_usuario=nome_usuario,
+                    email_destinatario=email_destinatario,
+                    dados_user=dados_user,
+                    payload_completo=payload_completo,
+                    data_limite_str=data_limite_str,
+                    endereco_concessionaria=endereco_concessionaria,
+                    ano=datetime.now().year
+                )
+
+            # Configurando o cabeçalho do e-mail
+            msg = MIMEMultipart()
+            msg['From'] = remetente
+            msg['To'] = email_destinatario
+            msg['Subject'] = assunto
+            msg.attach(MIMEText(corpo_email, 'html'))
+
+            try:
+                # Usando SSL direto (mais confiável com Gmail)
+                server = smtplib.SMTP_SSL(servidor_smtp, porta_smtp, timeout=60)
+                server.set_debuglevel(1)  # Ative para debugging
+                server.ehlo()  # Identifica-se ao servidor
+                server.login(remetente, senha)
+                text = msg.as_string()
+                server.sendmail(remetente, email_destinatario, text)
+                server.quit()
+                print(f"E-mail de pagamento do pix enviado para {email_destinatario}")
+            except Exception as e:
+                print(f"Erro ao enviar e-mail de pagamento: {e}")
+
+        except Exception as e:
+            print(f"Erro na tarefa de envio do e-mail: {e}")
+
+    Thread(target=task_envio, daemon=True).start()
 
 def calcula_crc16(payload):
     crc16 = crcmod.mkCrcFun(0x11021, initCrc=0xFFFF, rev=False)
@@ -22,6 +89,19 @@ def format_tlv(id, value):
 
 @app.route('/gerar_pix', methods=['POST'])
 def gerar_pix():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        email = payload['email']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
     try:
         data = request.get_json()
         if not data or 'valor' not in data:
@@ -96,6 +176,62 @@ def gerar_pix():
         # Salva o QR Code no disco
         qr.save(caminho_arquivo)
 
-        return send_file(caminho_arquivo, mimetype='image/png', as_attachment=True, download_name=nome_arquivo)
+        # Substitua pelo seu Client-ID
+        client_id = '2b7b62f0f313a32'
+
+        headers = {
+            'Authorization': f'Client-ID {client_id}',
+        }
+
+        url = 'https://api.imgur.com/3/image'
+
+        # Abre a imagem e envia
+        with open(caminho_arquivo, 'rb') as image_file:
+            data = {
+                'type': 'image',
+                'title': 'Pix',
+                'description': 'Pagamento de Teste'
+            }
+            files = {
+                'image': image_file
+            }
+            response = requests.post(url, headers=headers, data=data, files=files)
+
+        # Mostra a resposta
+        print(response.status_code)
+        print(response.json())
+
+        # Verifica o status e exibe o link
+        if response.status_code == 200:
+            json_response = response.json()
+            image_link = json_response['data']['link']
+            print(f' Upload feito com sucesso! Link da imagem: {image_link}')
+
+            cursor = con.cursor()
+            cursor.execute("SELECT nome_completo, email, cpf_cnpj, telefone FROM usuario WHERE email = ?", (email,))
+            usuario = cursor.fetchone()
+            cursor.close()
+
+            if not usuario:
+                return jsonify({"erro": "Usuário não encontrado"}), 404
+
+            nome_usuario, email_usuario, cpf_usuario, telefone_usuario = usuario
+
+            dados_user = {
+                "nome": nome_usuario,
+                "email": email_usuario,
+                "cpf": cpf_usuario,
+                "telefone": telefone_usuario,
+                "qrcode_url": image_link,
+                "valor": valor
+            }
+
+            enviar_email_qrcode(email, dados_user, nome_usuario, payload_completo)
+
+            return send_file(caminho_arquivo, mimetype='image/png', as_attachment=True, download_name=nome_arquivo)
+        else:
+            print(f' Erro no upload! Código: {response.status_code}')
+            print(response.text)
+
     except Exception as e:
-        return jsonify({"erro": f"Ocorreu um erro interno: {str(e)}"}), 500
+        return jsonify({"erro": f"Ocorreu um erro internosse: {str(e)}"}), 500

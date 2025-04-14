@@ -130,9 +130,6 @@ def buscar_dados_moto_por_id(id_moto):
         }
     return None
 
-# -----------------------------
-# Envio de E-mail de Reserva (Assíncrono)
-# -----------------------------
 @app.route('/buscar_reservas', methods=['GET'])
 def buscar_reserva():
     token = request.headers.get('Authorization')
@@ -191,7 +188,7 @@ def enviar_email_reserva(email_destinatario, tipo_veiculo, dados_veiculo):
     def task_envio():
         try:
             remetente = 'netcars.contato@gmail.com'
-            senha = senha_app_email  # Certifique-se de que essa variável está definida em algum lugar
+            senha = senha_app_email
             servidor_smtp = 'smtp.gmail.com'
             porta_smtp = 465
 
@@ -200,7 +197,6 @@ def enviar_email_reserva(email_destinatario, tipo_veiculo, dados_veiculo):
             data_limite = data_envio + timedelta(days=3)
             data_limite_str = data_limite.strftime("%d/%m/%Y")
 
-            # Endereço fictício da concessionária
             endereco_concessionaria = "Av. Exemplo, 1234 - Centro, Cidade Fictícia"
 
             # Montar o corpo do e-mail

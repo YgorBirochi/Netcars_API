@@ -5,8 +5,8 @@ from flask_bcrypt import generate_password_hash, check_password_hash
 import jwt
 from datetime import datetime, timedelta
 
-def generate_token(user_id):
-    payload = {'id_usuario': user_id}
+def generate_token(user_id, email):
+    payload = {'id_usuario': user_id, 'email': email}
     token = jwt.encode(payload, senha_secreta, algorithm='HS256')
     return token
 
@@ -132,7 +132,7 @@ def create_user():
     con.commit()
 
     cursor.close()
-    token = generate_token(id_usuario)
+    token = generate_token(id_usuario, email)
 
     return jsonify({
         'success': "Email cadastrado com sucesso!",
@@ -259,7 +259,7 @@ def update_user(id):
         con.commit()
         cursor.close()
 
-        token = generate_token(id)
+        token = generate_token(id, email)
 
         return jsonify({
             'success': "Informações atualizadas com sucesso!",
@@ -391,7 +391,7 @@ def login_user():
         return jsonify({'error': 'Usuário inativo'}), 401
 
     if check_password_hash(senha_hash, senha):
-        token = generate_token(id_usuario)
+        token = generate_token(id_usuario, email)
         tentativas = 0
         cursor.close()
         return jsonify({

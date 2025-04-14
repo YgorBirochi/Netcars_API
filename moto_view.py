@@ -1,6 +1,10 @@
-from flask import Flask, jsonify, request, send_from_directory, url_for
-from main import app, con, upload_folder, senha_secreta
+from flask import Flask, jsonify, request, send_from_directory, url_for, current_app, render_template
+from main import app, con, upload_folder, senha_secreta, senha_app_email
 from datetime import datetime
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from threading import Thread
+import smtplib
 import pytz
 import os
 import jwt
@@ -11,6 +15,119 @@ def remover_bearer(token):
         return token[len('Bearer '):]
     else:
         return token
+
+def buscar_dados_moto_por_id(id_moto):
+    cursor = con.cursor()
+    query = '''
+        SELECT id_moto, marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, 
+               marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao,
+               estado, cidade, quilometragem, preco_compra, preco_venda, placa, alimentacao, criado_em, ativo, id_usuario_reserva
+        FROM MOTOS
+        WHERE id_moto = ?
+    '''
+    cursor.execute(query, (id_moto,))
+    resultado = cursor.fetchone()
+
+    if resultado[23]:
+        cursor.execute('SELECT NOME_COMPLETO FROM USUARIO WHERE ID_USUARIO = ?', (resultado[23],))
+        nome_usuario = cursor.fetchone()[0]
+    else:
+        nome_usuario = None
+
+    cursor.close()
+
+    images_dir = os.path.join(app.root_path, upload_folder, 'Motos', str(id_moto))
+    imagens = []
+    if os.path.exists(images_dir):
+        for file in os.listdir(images_dir):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                imagem_url = url_for('get_moto_image', id_moto=id_moto, filename=file, _external=True)
+                imagens.append(imagem_url)
+
+    if resultado and imagens:
+        return {
+            'id': resultado[0],
+            'marca': resultado[1],
+            'modelo': resultado[2],
+            'ano_modelo': resultado[3],
+            'ano_fabricacao': resultado[4],
+            'categoria': resultado[5],
+            'cor': resultado[6],
+            'renavam': resultado[7],
+            'marchas': resultado[8],
+            'partida': resultado[9],
+            'tipo_motor': resultado[10],
+            'cilindrada': resultado[11],
+            'freio_dianteiro_traseiro': resultado[12],
+            'refrigeracao': resultado[13],
+            'estado': resultado[14],
+            'cidade': resultado[15],
+            'quilometragem': resultado[16],
+            'preco_compra': resultado[17],
+            'preco_venda': resultado[18],
+            'placa': resultado[19],
+            'alimentacao': resultado[20],
+            'criado_em': resultado[21],
+            'ativo': resultado[22],
+            'nome_cliente': nome_usuario,
+            'imagens': imagens
+        }
+    return None
+
+def enviar_email_cancelamento(email_destinatario, tipo_veiculo, dados_veiculo):
+    app_context = current_app._get_current_object()
+
+    def task_envio():
+        try:
+            remetente = 'netcars.contato@gmail.com'
+            senha = senha_app_email
+            servidor_smtp = 'smtp.gmail.com'
+            porta_smtp = 465
+
+            # Data do cancelamento
+            data_envio = datetime.now()
+            data_cancelamento_str = data_envio.strftime("%d/%m/%Y")
+
+            endereco_concessionaria = "Av. Exemplo, 1234 - Centro, Cidade Fictícia"
+
+            assunto = "NetCars - Cancelamento de Reserva"
+
+            # Renderiza o corpo do e-mail utilizando um template específico
+            with app_context.app_context():
+                corpo_email = render_template(
+                    'email_cancelar_reserva.html',
+                    email_destinatario=email_destinatario,
+                    tipo_veiculo=tipo_veiculo,
+                    dados_veiculo=dados_veiculo,
+                    data_cancelamento_str=data_cancelamento_str,
+                    endereco_concessionaria=endereco_concessionaria,
+                    ano=datetime.now().year
+                )
+
+            # Configura o cabeçalho do e-mail
+            msg = MIMEMultipart()
+            msg['From'] = remetente
+            msg['To'] = email_destinatario
+            msg['Subject'] = assunto
+            msg.attach(MIMEText(corpo_email, 'html'))
+
+            try:
+                # Usando conexão SSL para envio do e-mail
+                server = smtplib.SMTP_SSL(servidor_smtp, porta_smtp, timeout=60)
+                server.set_debuglevel(1)  # Ativa logs de debugging se necessário
+                server.ehlo()  # Realiza a identificação junto ao servidor
+                server.login(remetente, senha)
+                text = msg.as_string()
+                server.sendmail(remetente, email_destinatario, text)
+                server.quit()
+                print(f"E-mail de cancelamento enviado para {email_destinatario}")
+            except Exception as e:
+                print(f"Erro ao enviar e-mail de cancelamento: {e}")
+
+        except Exception as e:
+            print(f"Erro na tarefa de envio do e-mail: {e}")
+
+    Thread(target=task_envio, daemon=True).start()
 
 # Rota para servir as imagens de motos
 @app.route('/uploads/motos/<int:id_moto>/<filename>')
@@ -36,9 +153,11 @@ def cancelar_reserva_moto(id):
 
     cursor = con.cursor()
 
-    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
-
-    tipo_user = cursor.fetchone()[0]
+    # Buscar tipo de usuário
+    cursor.execute('SELECT TIPO_USUARIO, EMAIL FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    row_user = cursor.fetchone()
+    tipo_user = row_user[0]
+    email_user = row_user[1]
 
     try:
         if tipo_user in [1, 2]:
@@ -61,8 +180,15 @@ def cancelar_reserva_moto(id):
     except Exception as e:
         return jsonify({'error': e}), 400
     finally:
+        # Buscar os dados da moto (para o e-mail)
+        dados_moto = buscar_dados_moto_por_id(id)
+
+        # Enviar o e-mail de cancelamento
+        enviar_email_cancelamento(email_user, 'moto', dados_moto)
+
         con.commit()
         cursor.close()
+
         return jsonify({
             'success': 'Reserva cancelada com sucesso!'
         }), 200
