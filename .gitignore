@@ -5,3 +5,5 @@ __pycache__
 relatorio_carros.pdf
 relatorio_motos.pdf
 relatorio_usuarios.pdf
+upload/qrcodes
+upload/barcodes

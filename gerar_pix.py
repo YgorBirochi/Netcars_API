@@ -1,12 +1,14 @@
 from flask import Flask, send_file, jsonify, request
 import qrcode
+from qrcode.constants import ERROR_CORRECT_H
 from io import BytesIO
 import crcmod
 from datetime import datetime
 from main import app, con
 import os
 from PIL import Image
-
+import barcode
+from barcode.writer import ImageWriter
 
 
 def calcula_crc16(payload):
@@ -23,6 +25,88 @@ def format_tlv(id, value):
 def gerar_pix():
     try:
         data = request.get_json()
+        if not data or 'valor' not in data:
+            return jsonify({"erro": "O valor do PIX é obrigatório."}), 400
+
+        valor = f"{float(data['valor']):.2f}"
+
+        cursor = con.cursor()
+        cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
+        resultado = cursor.fetchone()
+        cursor.close()
+
+        if not resultado:
+            return jsonify({"erro": "Chave PIX não encontrada"}), 404
+
+        nome, chave_pix, cidade = resultado
+        nome = nome[:25] if nome else "Recebedor PIX"
+        cidade = cidade[:15] if cidade else "Cidade"
+
+        # Monta o campo 26 (Merchant Account Information) com TLVs internos
+        merchant_account_info = (
+                format_tlv("00", "br.gov.bcb.pix") +
+                format_tlv("01", chave_pix)
+        )
+        campo_26 = format_tlv("26", merchant_account_info)
+
+        payload_sem_crc = (
+                "000201" +  # Payload Format Indicator
+                "010212" +  # Point of Initiation Method
+                campo_26 +  # Merchant Account Information
+                "52040000" +  # Merchant Category Code
+                "5303986" +  # Currency - 986 = BRL
+                format_tlv("54", valor) +  # Transaction amount
+                "5802BR" +  # Country Code
+                format_tlv("59", nome) +  # Merchant Name
+                format_tlv("60", cidade) +  # Merchant City
+                format_tlv("62", format_tlv("05", "***")) +  # Additional data (TXID)
+                "6304"  # CRC placeholder
+        )
+
+        crc = calcula_crc16(payload_sem_crc)
+        payload_completo = payload_sem_crc + crc
+
+        # Criação do QR Code com configurações aprimoradas
+        qr_obj = qrcode.QRCode(
+            version=None,  # Permite ajuste automático da versão
+            error_correction=ERROR_CORRECT_H,  # Alta correção de erros (30%)
+            box_size=10,
+            border=4
+        )
+        qr_obj.add_data(payload_completo)
+        qr_obj.make(fit=True)
+        qr = qr_obj.make_image(fill_color="black", back_color="white")
+
+        # Cria a pasta 'upload/qrcodes' relativa ao diretório do projeto
+        pasta_qrcodes = os.path.join(os.getcwd(), "upload", "qrcodes")
+        os.makedirs(pasta_qrcodes, exist_ok=True)
+
+        # Conta quantos arquivos já existem com padrão 'pix_*.png'
+        arquivos_existentes = [f for f in os.listdir(pasta_qrcodes) if f.startswith("pix_") and f.endswith(".png")]
+        numeros_usados = []
+        for nome_arq in arquivos_existentes:
+            try:
+                num = int(nome_arq.replace("pix_", "").replace(".png", ""))
+                numeros_usados.append(num)
+            except ValueError:
+                continue
+        proximo_numero = max(numeros_usados, default=0) + 1
+        nome_arquivo = f"pix_{proximo_numero}.png"
+        caminho_arquivo = os.path.join(pasta_qrcodes, nome_arquivo)
+
+        # Salva o QR Code no disco
+        qr.save(caminho_arquivo)
+
+        return send_file(caminho_arquivo, mimetype='image/png', as_attachment=True, download_name=nome_arquivo)
+    except Exception as e:
+        return jsonify({"erro": f"Ocorreu um erro interno: {str(e)}"}), 500
+
+
+# Nova rota para gerar Barcode (Code128) com o mesmo payload do Pix
+@app.route('/gerar_codigobarra', methods=['POST'])
+def gerar_codigobarra():
+    try:
+        data = request.get_json()
 
         if not data or 'valor' not in data:
             return jsonify({"erro": "O valor do PIX é obrigatório."}), 400
@@ -31,58 +115,65 @@ def gerar_pix():
 
         cursor = con.cursor()
         cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg ")
-
         resultado = cursor.fetchone()
         cursor.close()
 
         if not resultado:
-            return jsonify({"erro": f"Chave PIX não encontrada"}), 404
+            return jsonify({"erro": "Chave PIX não encontrada"}), 404
 
         nome, chave_pix, cidade = resultado
         nome = nome[:25] if nome else "Recebedor PIX"
         cidade = cidade[:15] if cidade else "Cidade"
 
-        # Monta o campo 26 (Merchant Account Information) corretamente com TLVs internos
         merchant_account_info = (
-            format_tlv("00", "br.gov.bcb.pix") +  # GUI do Banco Central
-            format_tlv("01", chave_pix)           # Chave PIX
-            # Pode adicionar outros campos como "02" para descrição, se quiser
+            format_tlv("00", "br.gov.bcb.pix") +
+            format_tlv("01", chave_pix)
         )
         campo_26 = format_tlv("26", merchant_account_info)
 
         payload_sem_crc = (
-            "000201" +                     # Payload Format Indicator
-            "010212" +                     # Point of Initiation Method
-            campo_26 +                     # Merchant Account Information
-            "52040000" +                   # Merchant Category Code
-            "5303986" +                    # Currency - 986 = BRL
-            format_tlv("54", valor) +      # Transaction amount
-            "5802BR" +                     # Country Code
-            format_tlv("59", nome) +       # Merchant Name
-            format_tlv("60", cidade) +     # Merchant City
-            format_tlv("62", format_tlv("05", "***")) +  # Additional data (TXID)
-            "6304"                         # CRC placeholder
+            "000201" +
+            "010212" +
+            campo_26 +
+            "52040000" +
+            "5303986" +
+            format_tlv("54", valor) +
+            "5802BR" +
+            format_tlv("59", nome) +
+            format_tlv("60", cidade) +
+            format_tlv("62", format_tlv("05", "***")) +
+            "6304"
         )
 
         crc = calcula_crc16(payload_sem_crc)
         payload_completo = payload_sem_crc + crc
 
-        qr = qrcode.make(payload_completo)
+        # 🔧 Pasta para salvar os códigos de barras
+        pasta_barras = os.path.join(os.getcwd(), "upload", "barcodes")
+        os.makedirs(pasta_barras, exist_ok=True)
 
-        pasta_uploads = os.path.join("static/uploads", "qrcode")
-        os.makedirs(pasta_uploads, exist_ok=True)  # Cria a pasta se não existir
+        # 🔢 Nome incremental: pix_barra_1.png, pix_barra_2.png, etc.
+        arquivos_existentes = [f for f in os.listdir(pasta_barras) if f.startswith("pix_barra_") and f.endswith(".png")]
+        numeros_usados = []
+        for nome in arquivos_existentes:
+            try:
+                num = int(nome.replace("pix_barra_", "").replace(".png", ""))
+                numeros_usados.append(num)
+            except ValueError:
+                continue
 
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        nome_arquivo = f"pix.png"
-        caminho_arquivo = os.path.join(pasta_uploads, nome_arquivo)
+        proximo_numero = max(numeros_usados, default=0) + 1
+        nome_base = f"pix_barra_{proximo_numero}"
+        caminho_arquivo = os.path.join(pasta_barras, nome_base)
 
-        qr.save(caminho_arquivo)  # Salva o QR Code no disco
+        # 🧾 Gera o código de barras
+        code128 = barcode.get('code128', payload_completo, writer=ImageWriter())
+        code128.default_writer_options['write_text'] = False
+        code128.save(caminho_arquivo)
 
-        # img_io = BytesIO()
-        # qr.save(img_io, 'PNG')
-        # img_io.seek(0)
+        caminho_completo = caminho_arquivo + ".png"
 
-        # return send_file(img_io, mimetype='image/png', as_attachment=True, download_name='pix_qrcode.png')
-        return send_file(caminho_arquivo, mimetype='image/png', as_attachment=True, download_name=nome_arquivo)
+        return send_file(caminho_completo, mimetype='image/png', as_attachment=True, download_name=os.path.basename(caminho_completo))
+
     except Exception as e:
         return jsonify({"erro": f"Ocorreu um erro interno: {str(e)}"}), 500
