@@ -16,7 +16,6 @@ def calcula_crc16(payload):
     crc = crc16(payload.encode('utf-8'))
     return f"{crc:04X}"
 
-
 def format_tlv(id, value):
     return f"{id}{len(value):02d}{value}"
 
@@ -98,82 +97,5 @@ def gerar_pix():
         qr.save(caminho_arquivo)
 
         return send_file(caminho_arquivo, mimetype='image/png', as_attachment=True, download_name=nome_arquivo)
-    except Exception as e:
-        return jsonify({"erro": f"Ocorreu um erro interno: {str(e)}"}), 500
-
-
-# Nova rota para gerar Barcode (Code128) com o mesmo payload do Pix
-@app.route('/gerar_codigobarra', methods=['POST'])
-def gerar_codigobarra():
-    try:
-        data = request.get_json()
-
-        if not data or 'valor' not in data:
-            return jsonify({"erro": "O valor do PIX é obrigatório."}), 400
-
-        valor = f"{float(data['valor']):.2f}"
-
-        cursor = con.cursor()
-        cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg ")
-        resultado = cursor.fetchone()
-        cursor.close()
-
-        if not resultado:
-            return jsonify({"erro": "Chave PIX não encontrada"}), 404
-
-        nome, chave_pix, cidade = resultado
-        nome = nome[:25] if nome else "Recebedor PIX"
-        cidade = cidade[:15] if cidade else "Cidade"
-
-        merchant_account_info = (
-            format_tlv("00", "br.gov.bcb.pix") +
-            format_tlv("01", chave_pix)
-        )
-        campo_26 = format_tlv("26", merchant_account_info)
-
-        payload_sem_crc = (
-            "000201" +
-            "010212" +
-            campo_26 +
-            "52040000" +
-            "5303986" +
-            format_tlv("54", valor) +
-            "5802BR" +
-            format_tlv("59", nome) +
-            format_tlv("60", cidade) +
-            format_tlv("62", format_tlv("05", "***")) +
-            "6304"
-        )
-
-        crc = calcula_crc16(payload_sem_crc)
-        payload_completo = payload_sem_crc + crc
-
-        # 🔧 Pasta para salvar os códigos de barras
-        pasta_barras = os.path.join(os.getcwd(), "upload", "barcodes")
-        os.makedirs(pasta_barras, exist_ok=True)
-
-        # 🔢 Nome incremental: pix_barra_1.png, pix_barra_2.png, etc.
-        arquivos_existentes = [f for f in os.listdir(pasta_barras) if f.startswith("pix_barra_") and f.endswith(".png")]
-        numeros_usados = []
-        for nome in arquivos_existentes:
-            try:
-                num = int(nome.replace("pix_barra_", "").replace(".png", ""))
-                numeros_usados.append(num)
-            except ValueError:
-                continue
-
-        proximo_numero = max(numeros_usados, default=0) + 1
-        nome_base = f"pix_barra_{proximo_numero}"
-        caminho_arquivo = os.path.join(pasta_barras, nome_base)
-
-        # 🧾 Gera o código de barras
-        code128 = barcode.get('code128', payload_completo, writer=ImageWriter())
-        code128.default_writer_options['write_text'] = False
-        code128.save(caminho_arquivo)
-
-        caminho_completo = caminho_arquivo + ".png"
-
-        return send_file(caminho_completo, mimetype='image/png', as_attachment=True, download_name=os.path.basename(caminho_completo))
-
     except Exception as e:
         return jsonify({"erro": f"Ocorreu um erro interno: {str(e)}"}), 500
