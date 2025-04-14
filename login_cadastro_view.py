@@ -27,6 +27,27 @@ def formatarNome(nome):
     partes_formatadas = [p.lower().capitalize() for p in partes]
     return " ".join(partes_formatadas)
 
+@app.route('/manutencao', methods=['GET'])
+def get_manu():
+    cursor = con.cursor()
+
+    cursor.execute('SELECT ID_MANUTENCAO, TIPO_VEICULO, DATA_MANUTENCAO, SITUACAO, VALOR_TOTAL FROM MANUTENCAO ')
+    resultado = cursor.fetchall()
+
+    manu_dic = []
+    for manu in resultado:
+        manu_dic.append({
+            'id_manutencao': manu[0],
+            '': manu[1],
+            'valor_total': manu[2],
+            'situacao': manu[3],
+            'data_manutencao': manu[4],
+        })
+
+    cursor.close()
+
+    return jsonify({'manutencao': manu_dic}), 200
+
 @app.route('/cadastro', methods=['GET'])
 def get_user():
     cursor = con.cursor()
