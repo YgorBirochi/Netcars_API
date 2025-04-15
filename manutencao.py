@@ -36,7 +36,7 @@ def get_manutencao():
         cursor = con.cursor()
 
         cursor.execute(
-            'SELECT ID_MANUTENCAO, ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO, VALOR_TOTAL FROM MANUTENCAO')
+            'SELECT ID_MANUTENCAO, ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO, VALOR_TOTAL FROM MANUTENCAO WHERE ATIVO IS TRUE')
 
         resposta = cursor.fetchall()
         if not resposta:
@@ -89,9 +89,10 @@ def get_manutencao_id(id):
     try:
         cursor = con.cursor()
 
-        cursor.execute(
-            'SELECT ID_MANUTENCAO, ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO, VALOR_TOTAL FROM MANUTENCAO WHERE ID_MANUTENCAO = ?',
-        (id,))
+        cursor.execute('''
+            SELECT ID_MANUTENCAO, ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO, VALOR_TOTAL 
+            FROM MANUTENCAO WHERE ID_MANUTENCAO = ? AND ATIVO IS TRUE
+        ''', (id,))
 
         manutencao = cursor.fetchone()
 
@@ -145,11 +146,11 @@ def get_manutencao_id_veic(id_veic, tipo_veic):
         if tipo_veic == 'carro':
             cursor.execute('''
             SELECT ID_MANUTENCAO, ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO, VALOR_TOTAL 
-            FROM MANUTENCAO WHERE ID_VEICULO = ? AND TIPO_VEICULO = 1''',(id_veic,))
+            FROM MANUTENCAO WHERE ID_VEICULO = ? AND TIPO_VEICULO = 1 AND ATIVO IS TRUE''',(id_veic,))
         else:
             cursor.execute('''
             SELECT ID_MANUTENCAO, ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO, VALOR_TOTAL 
-            FROM MANUTENCAO WHERE ID_VEICULO = ? AND TIPO_VEICULO = 2''', (id_veic,))
+            FROM MANUTENCAO WHERE ID_VEICULO = ? AND TIPO_VEICULO = 2 AND ATIVO IS TRUE''', (id_veic,))
 
         manutencoes = cursor.fetchall()
 
@@ -208,7 +209,7 @@ def post_manutencao():
     data_manutencao = data.get('data')
     observacao = data.get('observacao')
 
-    if not id_veic or not tipo_veic or not data or not observacao:
+    if not id_veic or not tipo_veic or not data_manutencao or not observacao:
         return jsonify({
             'error': 'Dados incompletos.'
         }), 400
@@ -226,9 +227,9 @@ def post_manutencao():
 
     cursor.execute('''
             INSERT INTO MANUTENCAO 
-            (ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO)
+            (ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO, ATIVO)
             VALUES
-            (?, ?, ?, ?)
+            (?, ?, ?, ?, TRUE)
             RETURNING ID_MANUTENCAO
         ''', (id_veic, tipo_veic, data_manutencao, observacao))
 
@@ -242,8 +243,8 @@ def post_manutencao():
         'id_manutencao': id_manutencao
     }), 200
 
-@app.route('/manutencao', methods=['PUT'])
-def put_manutencao():
+@app.route('/manutencao/<int:id_veic>', methods=['PUT'])
+def put_manutencao(id_veic):
     token = request.headers.get('Authorization')
     if not token:
         return jsonify({'error': 'Token de autenticação necessário'}), 401
@@ -266,8 +267,7 @@ def put_manutencao():
 
     data = request.get_json()
 
-    id_veic = data.get('id_veic')
-    tipo_veic = data.get('tipo_veic')
+    tipo_veic = 1 if data.get('tipo_veic') == 'carro' else 2
     data_manutencao = data.get('data')
     observacao = data.get('observacao')
     id_manutencao = data.get('id_manutencao')
@@ -321,7 +321,7 @@ def delete_manutencao(id):
         if cursor.fetchone() is None:
             return jsonify({'error': 'Manutenção não encontrada'}), 404
 
-        cursor.execute('DELETE FROM MANUTENCAO WHERE ID_MANUTENCAO = ?', (id,))
+        cursor.execute('UPDATE MANUTENCAO SET ATIVO = FALSE WHERE ID_MANUTENCAO = ?', (id,))
         con.commit()
         return jsonify({'success': 'Manutenção excluída com sucesso.'}), 200
     except Exception as e:
@@ -351,7 +351,7 @@ def get_servicos():
         return jsonify({'error': 'Acesso restrito a administradores'}), 403
 
     try:
-        cursor.execute('SELECT id_servicos, DESCRICAO, VALOR FROM SERVICOS')
+        cursor.execute('SELECT id_servicos, DESCRICAO, VALOR FROM SERVICOS WHERE ATIVO IS TRUE')
         servicos = [
             {'id_servicos': s[0], 'descricao': s[1], 'valor': s[2]}
             for s in cursor.fetchall()
@@ -398,13 +398,14 @@ def get_manutencao_servicos(id):
 
         servicos = []
         for id_serv in ids_servicos:
-            cursor.execute('SELECT ID_SERVICOS, DESCRICAO, VALOR FROM SERVICOS WHERE id_servicos = ?', (id_serv,))
+            cursor.execute('SELECT ID_SERVICOS, DESCRICAO, VALOR FROM SERVICOS WHERE id_servicos = ? AND ATIVO IS TRUE', (id_serv,))
             servico = cursor.fetchone()
-            servicos.append({
-                "id_servicos0": servico[0],
-                "descricao": servico[1],
-                "valor": servico[2]
-            })
+            if servico:
+                servicos.append({
+                    "id_servicos": servico[0],
+                    "descricao": servico[1],
+                    "valor": servico[2]
+                })
 
         return jsonify({
             'servicos': servicos
@@ -436,14 +437,14 @@ def get_servico_id(id):
         return jsonify({'error': 'Acesso restrito a administradores'}), 403
 
     try:
-        cursor.execute('SELECT id_servicos, DESCRICAO, VALOR FROM SERVICOS WHERE id_servicos = ?', (id,))
+        cursor.execute('SELECT id_servicos, DESCRICAO, VALOR FROM SERVICOS WHERE id_servicos = ? AND ATIVO IS TRUE', (id,))
         servico = cursor.fetchone()
         if not servico:
             return jsonify({'error': 'Serviço não encontrado'}), 404
 
         return jsonify({
             'servico': {
-                'id_servicoss': servico[0],
+                'id_servicos': servico[0],
                 'descricao': servico[1],
                 'valor': servico[2]
             }
@@ -475,20 +476,22 @@ def post_servico():
         return jsonify({'error': 'Acesso restrito a administradores'}), 403
 
     data = request.get_json()
+
     descricao = data.get('descricao')
     valor = data.get('valor')
-    id_manutencao = data.get('id_manutencao')
-
-    cursor.execute('SELECT ID_MANUTENCAO FROM MANUTENCAO')
-    ids_manutencao = [row[0] for row in cursor.fetchall()]
-    if id_manutencao not in ids_manutencao:
-        return jsonify({'error': 'Manutenção não encontrada.'}), 400
+    id_manutencao = int(data.get('id_manutencao'))
 
     if not descricao or valor is None or not id_manutencao:
         return jsonify({'error': 'Dados incompletos.'}), 400
 
+    cursor.execute('SELECT ID_MANUTENCAO FROM MANUTENCAO')
+    ids_manutencao = [row[0] for row in cursor.fetchall()]
+
+    if id_manutencao not in ids_manutencao:
+        return jsonify({'error': 'Manutenção não encontrada.'}), 400
+
     try:
-        cursor.execute('INSERT INTO SERVICOS (DESCRICAO, VALOR) VALUES (?, ?) RETURNING ID_SERVICOS', (descricao, valor))
+        cursor.execute('INSERT INTO SERVICOS (DESCRICAO, VALOR, ATIVO) VALUES (?, ?, TRUE) RETURNING ID_SERVICOS', (descricao, valor))
         id_servico = cursor.fetchone()[0]
 
         cursor.execute('''
@@ -576,7 +579,7 @@ def delete_servico(id):
         if cursor.fetchone() is None:
             return jsonify({'error': 'Serviço não encontrado'}), 404
 
-        cursor.execute('DELETE FROM SERVICOS WHERE id_servicos = ?', (id,))
+        cursor.execute('UPDATE SERVICOS SET ATIVO = FALSE WHERE id_servicos = ?', (id,))
         con.commit()
         return jsonify({'success': 'Serviço excluído com sucesso.'}), 200
     except Exception as e:
