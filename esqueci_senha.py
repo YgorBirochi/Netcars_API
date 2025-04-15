@@ -1,4 +1,4 @@
-import smtplib
+from flask_bcrypt import generate_password_hash, check_password_hash
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -6,8 +6,8 @@ from threading import Thread
 from flask import Flask, request, jsonify, render_template, current_app
 from main import app, con, senha_app_email, upload_folder
 import random, re
-from flask_bcrypt import generate_password_hash, check_password_hash
 import os
+import smtplib
 
 # -----------------------------
 # Funções Auxiliares (Banco e Senha)

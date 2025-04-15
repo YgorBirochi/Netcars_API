@@ -1,9 +1,9 @@
 from flask import Flask, jsonify, request
 from main import app, con, senha_secreta
-import re
+from datetime import datetime, timedelta
 from flask_bcrypt import generate_password_hash, check_password_hash
 import jwt
-from datetime import datetime, timedelta
+import re
 
 def generate_token(user_id, email):
     payload = {'id_usuario': user_id, 'email': email}

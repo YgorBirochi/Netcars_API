@@ -1,11 +1,11 @@
-import smtplib
+from main import app, con, senha_app_email, senha_secreta, upload_folder
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from threading import Thread
 from flask import Flask, request, jsonify, url_for, render_template, current_app
 import jwt
-from main import app, con, senha_app_email, senha_secreta, upload_folder
+import smtplib
 import os
 
 
