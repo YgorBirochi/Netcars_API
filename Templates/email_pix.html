@@ -81,9 +81,21 @@
             height: auto;
         }
 
-        .payment-info {
+        .payment-info p {
+            font-size: 16px;
+            font-weight: 600;
+            color: #444;
+        }
+
+        .codigo-pix {
+                      display: inline-block;
             font-size: 16px;
             color: #444;
+            padding: 12px 20px;
+            background-color: #fff;
+            border-radius: 6px;
+            border: 1px solid #bce1d8;
+            box-shadow: 0 2px 6px rgba(0, 127, 95, 0.1);
         }
 
         .data-box {
@@ -186,8 +198,8 @@
                     <img src="{{ dados_user.qrcode_url }}" alt="QR Code para pagamento PIX">
                 </div>
                 <div class="payment-info">
-                    Ou copie o código PIX: <br>
-                    <strong>{{ payload_completo }}</strong>
+                    <p>Ou copie o código PIX:</p>
+                    <div class="codigo-pix">{{ payload_completo }}</div>
                 </div>
             </div>
 
