@@ -454,6 +454,38 @@ def get_servico_id(id):
     finally:
         cursor.close()
 
+# Função para atualizar o valor total
+def atualizar_valor_total(id_manutencao):
+    cursor = con.cursor()
+
+    try:
+        cursor.execute('''
+                        SELECT ID_SERVICOS FROM MANUTENCAO_SERVICOS
+                        WHERE ID_MANUTENCAO = ?
+                    ''', (id_manutencao,))
+
+        ids_servicos = [row[0] for row in cursor.fetchall()]
+
+        valor_total = 0
+
+        for id in ids_servicos:
+            cursor.execute('''
+                        SELECT VALOR FROM SERVICOS WHERE ATIVO IS TRUE AND ID_SERVICOS = ?
+                        ''', (id,))
+            valor = cursor.fetchone()
+
+            if not valor or valor is None:
+                continue
+
+            valor_total += valor[0]
+
+        cursor.execute('''
+            UPDATE MANUTENCAO SET VALOR_TOTAL = ?
+            WHERE ID_MANUTENCAO = ?
+        ''', (valor_total, id_manutencao))
+    finally:
+        cursor.close()
+
 @app.route('/servicos', methods=['POST'])
 def post_servico():
     token = request.headers.get('Authorization')
@@ -484,6 +516,9 @@ def post_servico():
     if not descricao or valor is None or not id_manutencao:
         return jsonify({'error': 'Dados incompletos.'}), 400
 
+    if int(valor) <= 0:
+        return jsonify({'error': 'Valor inválido.'}), 400
+
     cursor.execute('SELECT ID_MANUTENCAO FROM MANUTENCAO')
     ids_manutencao = [row[0] for row in cursor.fetchall()]
 
@@ -499,6 +534,8 @@ def post_servico():
             (ID_MANUTENCAO, ID_SERVICOS)
             VALUES (?, ?)
         ''', (id_manutencao, id_servico))
+
+        atualizar_valor_total(id_manutencao)
 
         con.commit()
 
@@ -546,7 +583,16 @@ def put_servico():
             UPDATE SERVICOS SET DESCRICAO = ?, VALOR = ?
             WHERE id_servicos = ?
         ''', (descricao, valor, id_servicos))
+
+        cursor.execute('SELECT ID_MANUTENCAO FROM MANUTENCAO_SERVICOS WHERE ID_SERVICOS = ?', (id_servicos,))
+
+        id_manutencao = cursor.fetchone()[0]
+
+        # Atualizar o valor total
+        atualizar_valor_total(id_manutencao)
+
         con.commit()
+
         return jsonify({'success': 'Serviço atualizado com sucesso.'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 400
@@ -580,6 +626,15 @@ def delete_servico(id):
             return jsonify({'error': 'Serviço não encontrado'}), 404
 
         cursor.execute('UPDATE SERVICOS SET ATIVO = FALSE WHERE id_servicos = ?', (id,))
+
+        cursor.execute('SELECT ID_MANUTENCAO FROM MANUTENCAO_SERVICOS WHERE ID_SERVICOS = ?', (id,))
+
+        # Obtém o id da manutenção
+        id_manutencao = cursor.fetchone()[0]
+
+        # Atualiza o valor total
+        atualizar_valor_total(id_manutencao)
+
         con.commit()
         return jsonify({'success': 'Serviço excluído com sucesso.'}), 200
     except Exception as e:
