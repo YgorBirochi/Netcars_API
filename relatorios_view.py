@@ -1,4 +1,4 @@
-from flask import Flask, send_file, request
+from flask import Flask, send_file, request, jsonify
 from main import app, con
 from fpdf import FPDF
 from datetime import datetime
@@ -11,8 +11,13 @@ def format_none(value):
     return "Não informado" if value in [None, "none", "None"] else value
 
 def format_currency(value):
-    return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
+    # Trata valores nulos ou inválidos
+    if value in [None, "none", "None"]:
+        return "Não informado"
+    try:
+        return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "Não informado"
 
 def format_kilometragem(value):
     return f"{value:,} km".replace(",", ".")
@@ -416,6 +421,127 @@ class CustomUsuarioPDF(FPDF):
 
         return "..."
 
+# Classe personalizada para gerar o PDF de Manutenções
+class CustomManutencaoPDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        self.set_title("Relatório de Manutenções")
+        self.set_author("Sistema de Concessionária")
+
+        # cores
+        self.primary_color = (56, 56, 56)  # Cinza
+        self.accent_color = (220, 50, 50)  # Vermelho para destaques
+
+        # layout 3 colunas × 2 linhas
+        self.card_margin_x = 10
+        self.card_margin_y = 40
+        self.card_spacing_x = 8
+        self.card_spacing_y = 8
+        self.cols = 2
+        self.rows = 2
+        usable_w = self.w - 2*self.card_margin_x - (self.cols-1)*self.card_spacing_x
+        self.card_w = usable_w/self.cols
+        self.card_h = 90
+
+        # fontes
+        self.line_h = 6
+        self.font_norm = 11
+        self.font_bold = 12
+
+    def header(self):
+        self.set_font("Arial","B",14)
+        self.set_text_color(*self.primary_color)
+        self.cell(0,10,"Relatório de Manutenções",0,1,'C')
+        self.set_font("Arial","",10)
+        self.cell(0,6,f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}",0,1,'C')
+        self.ln(2)
+        self.set_line_width(0.5)
+        self.set_draw_color(*self.primary_color)
+        self.line(self.card_margin_x,30,self.w-self.card_margin_x,30)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Arial","I",8)
+        self.set_text_color(150,150,150)
+        self.cell(0,10,f"Página {self.page_no()}/{{nb}}",0,0,'C')
+
+    def create_manutencao_cards(self, manutencoes):
+        self.alias_nb_pages()
+        total = len(manutencoes)
+        per_page = self.cols*self.rows
+        for i,m in enumerate(manutencoes):
+            if i%per_page==0: self.add_page()
+            col = i%self.cols
+            row = (i%per_page)//self.cols
+            x = self.card_margin_x + col*(self.card_w+self.card_spacing_x)
+            y = self.card_margin_y + row*(self.card_h+self.card_spacing_y)
+            self._draw_card(m,x,y)
+        # total ao final
+        self.set_xy(self.card_margin_x, self.h-20)
+        self.set_font("Arial","B",12)
+        self.cell(0,10,f"Total de manutenções: {total}",0,0,'C')
+
+    def _draw_card(self, m, x, y):
+        self.set_fill_color(240, 240, 240)
+        self.rect(x, y, self.card_w, self.card_h, 'F')
+        cx = x + 4
+        cy = y + 6
+
+        # tipo do veículo
+        tp = 'Carro' if m['tipo_veiculo'] == 1 else 'Moto'
+        self.set_xy(cx, cy)
+        self.set_font("Arial", "B", self.font_bold)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, self.line_h, f"{tp}:", 0, 1)
+
+        # detalhes do veículo
+        self.set_font("Arial", "", self.font_norm)
+        info = [
+            f"Marca/Modelo: {format_none(m.get('marca'))} {format_none(m.get('modelo'))}",
+            f"Ano Fab.: {format_date(m.get('ano_fabricacao'))}",
+            f"Ano Mod.: {format_date(m.get('ano_modelo'))}",
+            f"Placa: {format_none(m.get('placa'))}"
+        ]
+
+        for line in info:
+            cy += self.line_h + 1
+            self.set_xy(cx, cy)
+            self.cell(0, self.line_h, line, 0, 1)
+
+        # valor
+        cy += self.line_h + 2
+        self.set_xy(cx, cy)
+        self.set_font("Arial", "B", self.font_bold)
+        self.cell(45, self.line_h, "Valor da manutenção:")
+        self.set_font("Arial", "", self.font_norm)
+        self.cell(0, self.line_h, format_currency(m['valor_total']), 0, 1)
+
+        # data
+        cy += self.line_h + 2
+        self.set_xy(cx, cy)
+        self.set_font("Arial", "B", self.font_bold)
+        self.cell(12, self.line_h, "Data:")
+        self.set_font("Arial", "", self.font_norm)
+        self.cell(0, self.line_h, format_date(m['data_manutencao']), 0, 1)
+
+        # observação
+        cy += self.line_h + 2
+        self.set_xy(cx, cy)
+        self.set_font("Arial", "B", self.font_bold)
+        self.cell(0, self.line_h, "Observação:")
+
+        cy += self.line_h + 1
+        self.set_xy(cx, cy)
+        self.set_font("Arial", "", self.font_norm)
+
+        before_obs_y = cy
+        self.multi_cell(self.card_w - 8, self.line_h, format_none(m['observacao']))
+        after_obs_y = self.get_y()
+
+        if after_obs_y > y + self.card_h:
+            self.card_h = after_obs_y - y + 6  # atualiza a altura do card dinamicamente
+
+
 # Fim das Classes
 
 # Início das Rotas
@@ -580,5 +706,75 @@ def criar_pdf_usuarios():
         as_attachment=False,
         download_name=f"Relatorio_Usuarios_{datetime.now().strftime('%Y%m%d')}.pdf"
     )
+
+@app.route('/relatorio/manutencao', methods=['GET'])
+def criar_pdf_manutencao():
+    id_veic = request.args.get('id_veic')
+    tipo_veic = request.args.get('tipo_veic')
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+
+    # busca manutenções
+    query = '''
+        SELECT ID_MANUTENCAO, ID_VEICULO, TIPO_VEICULO,
+               DATA_MANUTENCAO, OBSERVACAO, VALOR_TOTAL
+          FROM MANUTENCAO
+         WHERE ATIVO=TRUE
+    '''
+    params = []
+    if id_veic:
+        query += ' AND ID_VEICULO=?'
+        params.append(id_veic)
+    if tipo_veic:
+        params.append(1 if tipo_veic.lower()=='carro' else 2)
+        query += ' AND TIPO_VEICULO=?'
+    if data_inicio and data_fim:
+        query += ' AND DATE(DATA_MANUTENCAO) BETWEEN ? AND ?'
+        params.extend([data_inicio,data_fim])
+    elif data_inicio:
+        query += ' AND DATE(DATA_MANUTENCAO)>=?'
+        params.append(data_inicio)
+    elif data_fim:
+        query += ' AND DATE(DATA_MANUTENCAO)<=?'
+        params.append(data_fim)
+
+    cursor = con.cursor()
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    cursor.close()
+    if not rows:
+        return jsonify({'error':'Nenhuma manutenção encontrada.'}),404
+
+    # obter detalhes dos veículos
+    manutencoes = []
+    for r in rows:
+        _, id_v, tp, dt, obs, val = r
+        # consulta veículo
+        c = con.cursor()
+        if tp==1:  # carro
+            c.execute('SELECT marca,modelo,ano_fabricacao,ano_modelo,placa FROM CARROS WHERE id_carro=?',(id_v,))
+        else:      # moto
+            c.execute('SELECT marca,modelo,ano_fabricacao,ano_modelo,placa FROM MOTOS  WHERE id_moto=?',(id_v,))
+        veh = c.fetchone() or (None,None,None,None,None)
+        c.close()
+        manutencoes.append({
+            'id_manutencao': None,  # omitido
+            'id_veiculo': id_v,
+            'tipo_veiculo': tp,
+            'data_manutencao': dt,
+            'observacao': obs,
+            'valor_total': val,
+            'marca': veh[0],
+            'modelo':veh[1],
+            'ano_fabricacao':veh[2],
+            'ano_modelo':veh[3],
+            'placa':veh[4]
+        })
+
+    pdf = CustomManutencaoPDF()
+    pdf.create_manutencao_cards(manutencoes)
+    filename = f"relatorio_manutencoes.pdf"
+    pdf.output(filename)
+    return send_file(filename,mimetype='application/pdf',as_attachment=False,download_name=filename)
 
 # Fim das Rotas
