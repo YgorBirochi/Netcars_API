@@ -317,11 +317,20 @@ def delete_manutencao(id):
         return jsonify({'error': 'Acesso restrito a administradores'}), 403
 
     try:
-        cursor.execute('SELECT * FROM MANUTENCAO WHERE ID_MANUTENCAO = ?', (id,))
+        cursor.execute('SELECT 1 FROM MANUTENCAO WHERE ID_MANUTENCAO = ?', (id,))
+
         if cursor.fetchone() is None:
             return jsonify({'error': 'Manutenção não encontrada'}), 404
 
         cursor.execute('UPDATE MANUTENCAO SET ATIVO = FALSE WHERE ID_MANUTENCAO = ?', (id,))
+
+        cursor.execute('SELECT ID_SERVICOS FROM MANUTENCAO_SERVICOS WHERE ID_MANUTENCAO = ?', (id,))
+        ids_servicos = [row[0] for row in cursor.fetchall()]
+
+        if ids_servicos:
+            for id_servico in ids_servicos:
+                cursor.execute('UPDATE SERVICOS SET ATIVO = FALSE WHERE ID_SERVICOS = ?', (id_servico, ))
+
         con.commit()
         return jsonify({'success': 'Manutenção excluída com sucesso.'}), 200
     except Exception as e:
