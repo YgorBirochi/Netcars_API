@@ -31,6 +31,7 @@ from esqueci_senha import *
 from buscar_reserva import *
 from gerar_pix import *
 from manutencao import *
+from financiamento import *
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
