@@ -146,15 +146,15 @@ def get_manutencao_id_veic(id_veic, tipo_veic):
         if tipo_veic == 'carro':
             cursor.execute('''
             SELECT ID_MANUTENCAO, ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO, VALOR_TOTAL 
-            FROM MANUTENCAO WHERE ID_VEICULO = ? AND TIPO_VEICULO = 1 AND ATIVO IS TRUE''',(id_veic,))
+            FROM MANUTENCAO WHERE ID_VEICULO = ? AND TIPO_VEICULO = 1 AND ATIVO IS TRUE ORDER BY DATA_MANUTENCAO ASC''',(id_veic,))
         else:
             cursor.execute('''
             SELECT ID_MANUTENCAO, ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO, VALOR_TOTAL 
-            FROM MANUTENCAO WHERE ID_VEICULO = ? AND TIPO_VEICULO = 2 AND ATIVO IS TRUE''', (id_veic,))
+            FROM MANUTENCAO WHERE ID_VEICULO = ? AND TIPO_VEICULO = 2 AND ATIVO IS TRUE ORDER BY DATA_MANUTENCAO ASC''', (id_veic,))
 
         manutencoes = cursor.fetchall()
 
-        if not manutencoes:
+        if not manutencoes or len(manutencoes) <= 0:
             return jsonify({'error': 'Manutenção não encontrada.'}), 400
 
         data = []
@@ -227,9 +227,9 @@ def post_manutencao():
 
     cursor.execute('''
             INSERT INTO MANUTENCAO 
-            (ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO, ATIVO)
+            (ID_VEICULO, TIPO_VEICULO, DATA_MANUTENCAO, OBSERVACAO, ATIVO, VALOR_TOTAL)
             VALUES
-            (?, ?, ?, ?, TRUE)
+            (?, ?, ?, ?, TRUE, 0)
             RETURNING ID_MANUTENCAO
         ''', (id_veic, tipo_veic, data_manutencao, observacao))
 
