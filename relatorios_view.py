@@ -103,31 +103,58 @@ class CustomCarroPDF(FPDF):
         self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
 
     def create_car_cards(self, carros):
-        """Renderiza os cards de 3 em 3 por página com espaçamento"""
+        """
+        Renderiza os cards de 3 em 3 por página e exibe o total
+        no rodapé da última página.
+        """
         self.alias_nb_pages()
         total_carros = len(carros)
 
+        # 1) Se não houver carros, gera só uma página com mensagem + total
+        if total_carros == 0:
+            self.add_page()      # dispara header()
+            self.ln(10)          # espaçamento após o header
+
+            self.set_font("Arial", "", 12)
+            self.cell(
+                0, 10,
+                "Nenhum carro encontrado para os critérios informados.",
+                ln=True, align="C"
+            )
+
+            self.ln(8)
+            self.set_font("Arial", "B", 14)
+            self.cell(
+                0, 10,
+                f"Total de carros: {total_carros}",
+                ln=True, align="C"
+            )
+            return
+
+        # 2) Se houver carros, gera 3 cards por página
         for i, carro in enumerate(carros):
-            if i % 3 == 0:  # Nova página a cada 3 cards
+            # a cada 3 carros, abre página nova e reinicia current_page_y
+            if i % 3 == 0:
                 self.add_page()
-                self.current_page_y = 40  # Posição inicial abaixo do cabeçalho
+                # get_y() já está posicionado logo abaixo do header()
+                self.current_page_y = self.get_y()
 
-            # Calcula a posição vertical com espaçamento
-            card_position = self.current_page_y + (i % 3) * (self.card_height + self.card_spacing)
+            # calcula Y do card atual
+            start_y = self.current_page_y + (i % 3) * (self.card_height + self.card_spacing)
+            self._draw_card(carro, start_y)
 
-            self._draw_card(carro, card_position)
+            # se completou uma “fila” de 3, avança para a próxima linha
+            if i % 3 == 2:
+                self.current_page_y += self.card_height + self.card_spacing
 
-            # Atualiza a posição Y máxima da página
-            if (i % 3 == 2) or (i == len(carros) - 1):
-                self.current_page_y = 0  # Reseta para próxima página
-
-        # Adiciona a contagem total de veículos abaixo do último card
-        ultimo_card_y = self.current_page_y + ((len(carros) - 1) % 3) * (self.card_height + self.card_spacing)  # Calcula a posição do último card
-        contador_y = ultimo_card_y + self.card_height + 45  # Define o espaço logo abaixo do último card
-
-        self.set_y(contador_y)
+        # 3) Na última página, exibe o total no rodapé (30 pts acima do final)
+        self.set_y(-30)
         self.set_font("Arial", "B", 14)
-        self.cell(0, 10, f"Total de veículos: {total_carros}", ln=True, align="C")
+        self.cell(
+            0, 10,
+            f"Total de carros: {total_carros}",
+            ln=True, align="C"
+        )
 
 
     def _draw_card(self, data, start_y):
@@ -228,31 +255,61 @@ class CustomMotosPDF(FPDF):
         self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
 
     def create_moto_cards(self, motos):
-        """Renderiza os cards de motos de forma semelhante aos carros."""
+        """
+        Renderiza os cards de motos em uma grade de 3 por página
+        e exibe o total no rodapé da última página.
+        """
         self.alias_nb_pages()
         total_motos = len(motos)
 
+        # ——————————————————————————————————————————
+        # 1) Se não houver motos, gera só uma página com mensagem + total
+        if total_motos == 0:
+            self.add_page()  # dispara header()
+            self.ln(10)  # espaçamento após o header
+
+            self.set_font("Arial", "", 12)
+            self.cell(
+                0, 10,
+                "Nenhuma moto encontrada para os critérios informados.",
+                ln=True, align="C"
+            )
+
+            self.ln(8)
+            self.set_font("Arial", "B", 14)
+            self.cell(
+                0, 10,
+                f"Total de motos: {total_motos}",
+                ln=True, align="C"
+            )
+            return
+
+        # ——————————————————————————————————————————
+        # 2) Se houver motos, gera 3 cards por página
         for i, moto in enumerate(motos):
-            if i % 3 == 0:  # Nova página a cada 3 cards
+            # a cada 3 motos, abre página nova e reinicia current_page_y
+            if i % 3 == 0:
                 self.add_page()
-                self.current_page_y = 40  # Posição inicial abaixo do cabeçalho
+                # get_y() já está posicionado logo abaixo do header()
+                self.current_page_y = self.get_y()
 
-            # Calcula a posição vertical com espaçamento
-            card_position = self.current_page_y + (i % 3) * (self.card_height + self.card_spacing)
+            # posição vertical do card
+            card_y = self.current_page_y + (i % 3) * (self.card_height + self.card_spacing)
+            self._draw_card(moto, card_y)
 
-            self._draw_card(moto, card_position)
+            # se terminer uma “fila” de 3, avança para próxima linha
+            if i % 3 == 2:
+                self.current_page_y += self.card_height + self.card_spacing
 
-            # Atualiza a posição Y máxima da página
-            if (i % 3 == 2) or (i == len(motos) - 1):
-                self.current_page_y = 0  # Reseta para próxima página
-
-        # Adiciona a contagem total de motos abaixo do último card
-        ultimo_card_y = self.current_page_y + ((len(motos) - 1) % 3) * (self.card_height + self.card_spacing)  # Calcula a posição do último card
-        contador_y = ultimo_card_y + self.card_height + 45  # Define o espaço logo abaixo do último card
-
-        self.set_y(contador_y)
+        # ——————————————————————————————————————————
+        # 3) Na última página, exibe o total no rodapé (30 pts acima do final)
+        self.set_y(-30)
         self.set_font("Arial", "B", 14)
-        self.cell(0, 10, f"Total de motos: {total_motos}", ln=True, align="C")
+        self.cell(
+            0, 10,
+            f"Total de motos: {total_motos}",
+            ln=True, align="C"
+        )
 
     def _draw_card(self, data, start_y):
         """Desenha um card na posição vertical 'start_y'."""
@@ -354,24 +411,41 @@ class CustomUsuarioPDF(FPDF):
         self.alias_nb_pages()
         total_usuarios = len(usuarios)
 
+        # ——————————————————————————————————————————
+        # Caso não haja usuários, gera só uma página com mensagem e total
+        if total_usuarios == 0:
+            self.add_page()  # dispara header automaticamente
+            self.ln(10)  # dá um espaçamento após o header
+
+            self.set_font("Arial", "", 12)
+            self.cell(0, 10, "Nenhum usuário encontrado para os critérios informados.", ln=True, align="C")
+
+            self.ln(8)
+            self.set_font("Arial", "B", 14)
+            self.cell(0, 10, f"Total de usuários: {total_usuarios}", ln=True, align="C")
+            return
+
+        # ——————————————————————————————————————————
+        # Se chegou aqui, há pelo menos 1 usuário:
+
         for i, usuario in enumerate(usuarios):
             # Nova página a cada 8 cards
             if i % 8 == 0:
                 self.add_page()
-                self.current_page_y = 35  # Posição inicial abaixo do cabeçalho
+                self.current_page_y = 35  # posição inicial abaixo do header
 
-            # Calcula a posição do card na grade 2x4
-            row = (i % 8) // 2  # 0, 0, 1, 1, 2, 2, 3, 3
-            col = (i % 2)  # 0, 1, 0, 1, 0, 1, 0, 1
+            # Cálculo de linha e coluna (2 cols x 4 rows)
+            row = (i % 8) // 2
+            col = (i % 2)
 
-            # Calcula a posição X e Y do card
             card_x = self.card_margin_x + col * (self.card_width + self.card_spacing_x)
             card_y = self.current_page_y + row * (self.card_height + self.card_spacing_y)
 
             self._draw_card(usuario, card_x, card_y)
 
-        # Adiciona a contagem total de usuários na última página
-        self.set_y(-30)  # 30 pontos acima do rodapé
+        # ——————————————————————————————————————————
+        # Por fim, no final da última página, exibe o total
+        self.set_y(-30)  # 30 pts acima do footer
         self.set_font("Arial", "B", 14)
         self.cell(0, 10, f"Total de usuários: {total_usuarios}", ln=True, align="C")
 
@@ -422,7 +496,7 @@ class CustomUsuarioPDF(FPDF):
         return "..."
 
 # Classe personalizada para gerar o PDF de Manutenções
-class CustomManutencaoPDF(FPDF):
+class CustomManutencaoPDF(FPDF) :
     def __init__(self):
         super().__init__()
         self.set_title("Relatório de Manutenções")
@@ -466,20 +540,58 @@ class CustomManutencaoPDF(FPDF):
         self.cell(0,10,f"Página {self.page_no()}/{{nb}}",0,0,'C')
 
     def create_manutencao_cards(self, manutencoes):
+        """
+        Renderiza cards de manutenção em grid 2×2. Se não houver dados,
+        exibe apenas uma página com aviso e total = 0.
+        """
         self.alias_nb_pages()
         total = len(manutencoes)
-        per_page = self.cols*self.rows
-        for i,m in enumerate(manutencoes):
-            if i%per_page==0: self.add_page()
-            col = i%self.cols
-            row = (i%per_page)//self.cols
-            x = self.card_margin_x + col*(self.card_w+self.card_spacing_x)
-            y = self.card_margin_y + row*(self.card_h+self.card_spacing_y)
-            self._draw_card(m,x,y)
-        # total ao final
-        self.set_xy(self.card_margin_x, self.h-20)
-        self.set_font("Arial","B",12)
-        self.cell(0,10,f"Total de manutenções: {total}",0,0,'C')
+
+        # ——————————————————————————————————————————
+        # Caso NÃO haja manutenções, gera só uma página com mensagem + total
+        if total == 0:
+            self.add_page()  # dispara header()
+            self.ln(10)  # espaçamento após o header
+
+            self.set_font("Arial", "", 12)
+            self.cell(
+                0, 10,
+                "Nenhuma manutenção encontrada para os critérios informados.",
+                ln=True, align="C"
+            )
+
+            self.ln(8)
+            self.set_font("Arial", "B", 14)
+            self.cell(
+                0, 10,
+                f"Total de manutenções: {total}",
+                ln=True, align="C"
+            )
+            return
+
+        # ——————————————————————————————————————————
+        # Se houver dados, prepara grid
+        per_page = self.cols * self.rows
+
+        for i, m in enumerate(manutencoes):
+            # nova página a cada per_page
+            if i % per_page == 0:
+                self.add_page()
+
+            # coluna e linha dentro da página
+            col = i % self.cols
+            row = (i % per_page) // self.cols
+
+            x = self.card_margin_x + col * (self.card_w + self.card_spacing_x)
+            y = self.card_margin_y + row * (self.card_h + self.card_spacing_y)
+
+            self._draw_card(m, x, y)
+
+        # ——————————————————————————————————————————
+        # Imprime o total na última página (20 pts acima do rodapé)
+        self.set_xy(self.card_margin_x, self.h - 20)
+        self.set_font("Arial", "B", 12)
+        self.cell(0, 10, f"Total de manutenções: {total}", 0, 0, 'C')
 
     def _draw_card(self, m, x, y):
         self.set_fill_color(240, 240, 240)
@@ -709,72 +821,91 @@ def criar_pdf_usuarios():
 
 @app.route('/relatorio/manutencao', methods=['GET'])
 def criar_pdf_manutencao():
-    id_veic = request.args.get('id_veic')
-    tipo_veic = request.args.get('tipo_veic')
-    data_inicio = request.args.get('data_inicio')
-    data_fim = request.args.get('data_fim')
+    tipo_veic = request.args.get('tipo-veic', '').strip()  # '', 'Carros' ou 'Motos'
+    dia = request.args.get('dia', '').strip()
+    mes = request.args.get('mes', '').strip()
+    ano = request.args.get('ano', '').strip()
 
-    # busca manutenções
-    query = '''
-        SELECT ID_MANUTENCAO, ID_VEICULO, TIPO_VEICULO,
-               DATA_MANUTENCAO, OBSERVACAO, VALOR_TOTAL
+    # Query base
+    query = """
+        SELECT ID_MANUTENCAO,
+               ID_VEICULO,
+               TIPO_VEICULO,
+               DATA_MANUTENCAO,
+               OBSERVACAO,
+               VALOR_TOTAL
           FROM MANUTENCAO
-         WHERE ATIVO=TRUE
-    '''
+         WHERE ATIVO = TRUE
+    """
     params = []
-    if id_veic:
-        query += ' AND ID_VEICULO=?'
-        params.append(id_veic)
-    if tipo_veic:
-        params.append(1 if tipo_veic.lower()=='carro' else 2)
-        query += ' AND TIPO_VEICULO=?'
-    if data_inicio and data_fim:
-        query += ' AND DATE(DATA_MANUTENCAO) BETWEEN ? AND ?'
-        params.extend([data_inicio,data_fim])
-    elif data_inicio:
-        query += ' AND DATE(DATA_MANUTENCAO)>=?'
-        params.append(data_inicio)
-    elif data_fim:
-        query += ' AND DATE(DATA_MANUTENCAO)<=?'
-        params.append(data_fim)
 
+    # Filtro por tipo de veículo
+    if tipo_veic.lower() == 'carros':
+        query += " AND TIPO_VEICULO = ?"
+        params.append(1)
+    elif tipo_veic.lower() == 'motos':
+        query += " AND TIPO_VEICULO = ?"
+        params.append(2)
+
+    # Filtros por dia, mês e ano usando EXTRACT
+    if dia:
+        query += " AND EXTRACT(DAY   FROM DATA_MANUTENCAO) = ?"
+        params.append(int(dia))
+    if mes:
+        query += " AND EXTRACT(MONTH FROM DATA_MANUTENCAO) = ?"
+        params.append(int(mes))
+    if ano:
+        query += " AND EXTRACT(YEAR  FROM DATA_MANUTENCAO) = ?"
+        params.append(int(ano))
+
+    # Executa a consulta
     cursor = con.cursor()
     cursor.execute(query, params)
     rows = cursor.fetchall()
     cursor.close()
-    if not rows:
-        return jsonify({'error':'Nenhuma manutenção encontrada.'}),404
 
-    # obter detalhes dos veículos
+    # Converte tuplas em dicionários
     manutencoes = []
-    for r in rows:
-        _, id_v, tp, dt, obs, val = r
-        # consulta veículo
+    for id_m, id_v, tp, dt, obs, val in rows:
         c = con.cursor()
-        if tp==1:  # carro
-            c.execute('SELECT marca,modelo,ano_fabricacao,ano_modelo,placa FROM CARROS WHERE id_carro=?',(id_v,))
-        else:      # moto
-            c.execute('SELECT marca,modelo,ano_fabricacao,ano_modelo,placa FROM MOTOS  WHERE id_moto=?',(id_v,))
-        veh = c.fetchone() or (None,None,None,None,None)
+        if tp == 1:
+            c.execute(
+                'SELECT marca, modelo, ano_fabricacao, ano_modelo, placa '
+                'FROM CARROS WHERE id_carro = ?', (id_v,)
+            )
+        else:
+            c.execute(
+                'SELECT marca, modelo, ano_fabricacao, ano_modelo, placa '
+                'FROM MOTOS WHERE id_moto = ?', (id_v,)
+            )
+        veh = c.fetchone() or (None,)*5
         c.close()
+
         manutencoes.append({
-            'id_manutencao': None,  # omitido
-            'id_veiculo': id_v,
-            'tipo_veiculo': tp,
+            'id_manutencao':   id_m,
+            'id_veiculo':      id_v,
+            'tipo_veiculo':    tp,
             'data_manutencao': dt,
-            'observacao': obs,
-            'valor_total': val,
-            'marca': veh[0],
-            'modelo':veh[1],
-            'ano_fabricacao':veh[2],
-            'ano_modelo':veh[3],
-            'placa':veh[4]
+            'observacao':      obs,
+            'valor_total':     val,
+            'marca':           veh[0],
+            'modelo':          veh[1],
+            'ano_fabricacao':  veh[2],
+            'ano_modelo':      veh[3],
+            'placa':           veh[4],
         })
 
+    # Gera o PDF — se a lista estiver vazia, seu create_manutencao_cards exibe a página única de "nenhuma manutenção"
     pdf = CustomManutencaoPDF()
     pdf.create_manutencao_cards(manutencoes)
-    filename = f"relatorio_manutencoes.pdf"
+    filename = "relatorio_manutencoes.pdf"
     pdf.output(filename)
-    return send_file(filename,mimetype='application/pdf',as_attachment=False,download_name=filename)
+
+    return send_file(
+        filename,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=f"Relatorio_Manutencoes_{datetime.now():%Y%m%d}.pdf"
+    )
 
 # Fim das Rotas
