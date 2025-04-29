@@ -216,6 +216,45 @@ def update_user_simples():
 
     return jsonify({'success': "Informações atualizadas com sucesso!"}), 200
 
+@app.route('/verificar_cadastro', methods=['GET'])
+def verificar_cadastro_completo():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    cursor.execute('SELECT CPF_CNPJ, TELEFONE, DATA_NASCIMENTO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+
+    dadosUser = cursor.fetchone()
+    if not dadosUser:
+        return jsonify({
+            'error': 'Dados incompletos'
+        }), 400
+
+    cpf_cnpj = dadosUser[0]
+    telefone = dadosUser[1]
+    data_nascimento = dadosUser[2]
+
+    if not cpf_cnpj or not telefone or not data_nascimento:
+        return jsonify({
+            'error': 'Dados incompletos'
+        }), 400
+    else:
+        return jsonify({
+            'success': 'Dados completos'
+        }), 200
+
 @app.route('/cadastro/<int:id>', methods=['PUT'])
 def update_user(id):
     data = request.get_json()

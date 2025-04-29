@@ -10,8 +10,6 @@ def remover_bearer(token):
     else:
         return token
 
-
-
 @app.route('/movimentacoes', methods=['GET'])
 def get_movimentacoes():
     token = request.headers.get('Authorization')
@@ -85,7 +83,7 @@ def get_movimentacoes():
     finally:
         cursor.close()
 
-@app.route('/movimentacoes/tipo/<tipo>', methods=['GET'])
+@app.route('/movimentacoes/<tipo>', methods=['GET'])
 def get_movimentacoes_por_tipo(tipo):
     token = request.headers.get('Authorization')
     if not token:
@@ -151,7 +149,7 @@ def get_movimentacoes_por_tipo(tipo):
         cursor.close()
 
 
-@app.route('/movimentacoes/origem/<tabela>/<int:id_origem>', methods=['GET'])
+@app.route('/movimentacoes/<tabela>/<int:id_origem>', methods=['GET'])
 def get_movimentacoes_por_origem(tabela, id_origem):
     token = request.headers.get('Authorization')
     if not token:
@@ -283,7 +281,6 @@ def post_movimentacao():
         }), 400
     finally:
         cursor.close()
-
 
 @app.route('/movimentacoes/<int:id_mov>', methods=['PUT'])
 def put_movimentacao(id_mov):
