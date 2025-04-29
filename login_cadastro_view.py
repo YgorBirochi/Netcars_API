@@ -4,6 +4,7 @@ import re
 from flask_bcrypt import generate_password_hash, check_password_hash
 import jwt
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 
 def generate_token(user_id, email):
     payload = {'id_usuario': user_id, 'email': email}
@@ -226,6 +227,22 @@ def update_user(id):
     senha_hash = data.get('senha_hash')
     senha_nova = data.get('senha_nova')
     tipo_user = data.get('tipo_usuario')
+
+    # Exemplo: data_nascimento como string 'YYYY-MM-DD'
+    data_nascimento_dt = datetime.strptime(data_nascimento, '%Y-%m-%d')  #
+
+    # Data atual
+    data_atual = datetime.now()
+
+    # Calcula a diferença
+    dif = relativedelta(data_atual, data_nascimento_dt)  #
+
+    # Verifica se tem 18 anos completos
+    if dif.years < 18:
+        return jsonify({
+            'menor_de_idade': True
+        }), 400
+
     cursor = con.cursor()
 
     nome_completo = formatarNome(nome_completo)
@@ -353,22 +370,10 @@ def deletar_usuario(id):
         })
 
     cursor.execute('''
-        DELETE FROM USUARIO WHERE ID_USUARIO = ?
+        UPDATE USUARIO SET ATIVO = 0 WHERE ID_USUARIO = ?
     ''', (id,))
 
     con.commit()
-
-    # Apagar reservas ao deletar conta
-    cursor.execute(
-        'UPDATE CARROS SET RESERVADO = NULL, RESERVADO_EM = NULL, ID_USUARIO_RESERVA = NULL WHERE ID_USUARIO_RESERVA = ?',
-        (id,)
-    )
-
-    # Apagar reservas ao deletar conta
-    cursor.execute(
-        'UPDATE MOTOS SET RESERVADO = NULL, RESERVADO_EM = NULL, ID_USUARIO_RESERVA = NULL WHERE ID_USUARIO_RESERVA = ?',
-        (id,)
-    )
 
     cursor.close()
 
