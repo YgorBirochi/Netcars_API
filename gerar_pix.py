@@ -104,12 +104,30 @@ def gerar_pix():
 
     try:
         data = request.get_json()
-        if not data or 'valor' not in data:
-            return jsonify({"erro": "O valor do PIX é obrigatório."}), 400
-
-        valor = f"{float(data['valor']):.2f}"
+        if not data or 'tipo_veic' not in data or 'id_veic' not in data:
+            return jsonify({"error": "Dados incompletos."}), 400
 
         cursor = con.cursor()
+
+        tipo_veic = data.get('tipo_veic')
+        id_veic = data.get('id_veic')
+
+        if tipo_veic == 1:
+            cursor.execute('SELECT PRECO_VENDA FROM CARROS WHERE ID_CARRO = ?', (id_veic,))
+        elif tipo_veic == 2:
+            cursor.execute('SELECT PRECO_VENDA FROM MOTOS WHERE ID_MOTO = ?', (id_veic,))
+        else:
+            return jsonify({
+                'error': 'Tipo de veículo inválido.'
+            }), 400
+
+        resposta_veic = cursor.fetchone()
+
+        if not resposta_veic:
+            return jsonify({'error': 'Veículo não encontrado.'})
+
+        valor = f"{float(resposta_veic[0]):.2f}"
+
         cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
         resultado = cursor.fetchone()
         cursor.close()
