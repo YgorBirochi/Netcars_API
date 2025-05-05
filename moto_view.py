@@ -221,13 +221,39 @@ def get_moto():
         tipo_user = cursor.fetchone()[0]
 
         if tipo_user == 3:
-            cursor.execute('SELECT ID_USUARIO_RESERVA FROM MOTOS WHERE RESERVADO IS TRUE AND ID_USUARIO_RESERVA = ? AND ID_MOTO = ?', (id_usuario, idFiltro))
+            cursor.execute('SELECT 1 FROM MOTOS WHERE RESERVADO IS TRUE AND ID_USUARIO_RESERVA = ? AND ID_MOTO = ?', (id_usuario, idFiltro))
         else:
-            cursor.execute('SELECT ID_USUARIO_RESERVA FROM MOTOS WHERE RESERVADO IS TRUE AND ID_MOTO = ?', (idFiltro,))
+            cursor.execute('SELECT 1 FROM MOTOS WHERE RESERVADO IS TRUE AND ID_MOTO = ?', (idFiltro,))
 
         usuario_reservou = cursor.fetchone()
 
-        if usuario_reservou:
+        if tipo_user == 3:
+            cursor.execute(
+                '''
+                SELECT 1
+                FROM carros
+                INNER JOIN venda_compra
+                ON carros.id_carro = venda_compra.id_veiculo
+                AND venda_compra.tipo_veiculo = 1
+                WHERE venda_compra.id_usuario = ? AND carros.ativo = 0
+                AND carros.id_carro = ?
+                ''', (id_usuario, idFiltro)
+            )
+        else:
+            cursor.execute(
+                '''
+                SELECT 1
+                FROM carros
+                INNER JOIN venda_compra
+                ON carros.id_carro = venda_compra.id_veiculo
+                AND venda_compra.tipo_veiculo = 1
+                WHERE carros.ativo = 0 AND carros.id_carro = ?
+                ''', (idFiltro,)
+            )
+
+        carro_vendido = cursor.fetchone()
+
+        if usuario_reservou or carro_vendido:
                 cursor.execute(f'{query} WHERE ID_MOTO = ?', (idFiltro,))
 
                 moto = cursor.fetchone()
@@ -268,10 +294,17 @@ def get_moto():
                 }
 
                 cursor.close()
-                return jsonify({
-                    "reserva": True,
-                    "veiculos": [dados_moto]
-                }), 200
+
+                if usuario_reservou:
+                    return jsonify({
+                        "reserva": True,
+                        "veiculos": [dados_moto]
+                    }), 200
+                elif carro_vendido:
+                    return jsonify({
+                        "vendido": True,
+                        "veiculos": [dados_moto]
+                    }), 200
 
     anoMaxFiltro = data.get('ano-max')
     anoMinFiltro = data.get('ano-min')
@@ -328,6 +361,7 @@ def get_moto():
         params.append(f"%{nomeMoto}%")
         params.append(f"%{nomeMoto}%")
 
+    conditions.append('ATIVO = 0')
     conditions.append('RESERVADO IS NOT TRUE')
 
     if conditions:

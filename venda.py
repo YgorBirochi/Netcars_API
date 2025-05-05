@@ -46,17 +46,23 @@ def compra_a_vista():
 
         preco_venda = resposta[0]
 
+
+        if tipo_veic == 1:
+            cursor.execute('UPDATE CARROS SET ATIVO = 0 WHERE ID_CARRO = ?', (id_veic,))
+        else:
+            cursor.execute('UPDATE MOTOS SET ATIVO = 0 WHERE ID_MOTO = ?', (id_veic,))
+
         cursor.execute('''
                 INSERT INTO VENDA_COMPRA 
-                (TIPO_VENDA_COMPRA, VALOR_TOTAL, FORMA_PAGAMENTO, DATA_VENDA_COMPPRA, ID_USUARIO, TIPO_VEICULO, ID_VEICULO)
+                (TIPO_VENDA_COMPRA, VALOR_TOTAL, FORMA_PAGAMENTO, DATA_VENDA_COMPRA, ID_USUARIO, TIPO_VEICULO, ID_VEICULO)
                 VALUES (1, ?, 1, CURRENT_TIMESTAMP, ?, ?, ?)
             ''', (preco_venda, id_usuario, tipo_veic, id_veic))
 
         con.commit()
 
-        return jsonify({'success': 'Sua compra foi efetuada com sucesso!'}), 200
+        return jsonify({'success': 'Compra efetuada com sucesso! Veja mais detalhes na seção de "Financiamento".'}), 200
     except Exception as e:
-        print("error :" +e)
+        print({"error": e})
         return jsonify({"error": e}), 400
     finally:
         cursor.close()
