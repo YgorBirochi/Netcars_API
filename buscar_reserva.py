@@ -231,15 +231,29 @@ def buscar_financiamento():
         id_veiculo = data_financiamento[4]
         valor_total = data_financiamento[5]
 
-        cursor.execute('SELECT ')
+        cursor.execute('''
+            SELECT NUM_PARCELA, VALOR_PARCELA, VALOR_PARCELA_AMORTIZADA, DATA_VENCIMENTO, DATA_PAGAMENTO, STATUS 
+            FROM FINANCIAMENTO_PARCELA WHERE ID_FINANCIAMENTO = ?
+        ''', (id_financiamento,))
 
-    id_moto = [row[0] for row in data_moto]
-    dadosMoto = [buscar_dados_moto_por_id(id) for id in id_moto]
+        data_parcelas = cursor.fetchall()
 
-    return jsonify({
-        'carros': dadosCarro,
-        'motos': dadosMoto
-    })
+        lista_parcelas = []
+        for parcela in data_parcelas:
+            info = {
+                "num_parcela": parcela[0],
+                "valor_parcela": parcela[1],
+                "valor_parcela_amortizada": parcela[2],
+                "data_vencimento": parcela[3],
+                "data_pagamento": parcela[4],
+                "status": parcela[5]
+            }
+
+            lista_parcelas.append(info)
+
+        return jsonify({
+            'sla'
+        })
 
 @app.route('/buscar_venda', methods=['GET'])
 def buscar_venda():
