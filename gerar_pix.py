@@ -61,7 +61,7 @@ def Buscar_Usuario_Devedor():
                     context=context
                 )
 
-                print(f"Lembrete enviado para {email} (RG do usuário: {id_usuario})")
+                print(f"Lembrete enviado para {email} (ID do usuário: {id_usuario})")
             except Exception as e:
                 print(f"Erro ao processar usuário {id_usuario}: {e}")
         cur.close()
@@ -73,7 +73,6 @@ scheduler.add_job(
     minutes=1440
 )
 scheduler.start()
-
 
 def gerar_pix_funcao(nome: str, valor, chave_pix: str, cidade: str):
 
