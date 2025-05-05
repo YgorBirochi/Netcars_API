@@ -25,25 +25,48 @@ scheduler.init_app(app)
 def Buscar_Usuario_Devedor():
     with app.app_context():
         cur = con.cursor()
+
+        # Buscar dados da empresa
         cur.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
         empresa = cur.fetchone()
-        razao_social = empresa[0]
-        chave_pix = empresa[1]
-        cidade = empresa[2]
+        razao_social, chave_pix, cidade = empresa
 
-        cur = con.cursor()
-        cur.execute("""SELECT  F.ID_USUARIO, F.VALOR_DA_PARCELA, u.EMAIL, u.nome_completo FROM FINANCIAMENTOS f
-                    LEFT JOIN USUARIO u ON u.ID_USUARIO = f.ID_USUARIO 
-                    WHERE f.DATA_VENCIMENTO = CURRENT_DATE + 3
-                    AND f.DATA_PAGAMENTO  IS NULL  """)
+        # Buscar usuários devedores
+        cur.execute("""
+            SELECT u.ID_USUARIO,
+                   fp.VALOR_PARCELA,
+                   u.EMAIL,
+                   u.NOME_COMPLETO,
+                   fp.ID_FINANCIAMENTO,
+                   fp.ID_FINANCIAMENTO_PARCELA
+            FROM FINANCIAMENTO_PARCELA fp
+            LEFT JOIN FINANCIAMENTO f ON f.ID_FINANCIAMENTO = fp.ID_FINANCIAMENTO 
+            LEFT JOIN USUARIO u ON u.ID_USUARIO = f.ID_USUARIO 
+            WHERE fp.DATA_VENCIMENTO = CURRENT_DATE + 3
+              AND fp.DATA_PAGAMENTO IS NULL
+              AND COALESCE(fp.LEMBRETE, 0) = 0
+        """)
         devedores = cur.fetchall()
-        cur.close()
 
-        for id_usuario, valor, email, nome_completo in devedores:
+        # Atualizar lembretes
+        for row in devedores:
+            id_usuario, valor, email, nome_completo, id_financiamento, id_parcela = row
+            cur.execute("""
+                UPDATE FINANCIAMENTO_PARCELA 
+                SET LEMBRETE = 1 
+                WHERE ID_FINANCIAMENTO = ? AND ID_FINANCIAMENTO_PARCELA = ?
+            """, (id_financiamento, id_parcela))
+
+        con.commit()
+
+        # Enviar lembretes
+        for row in devedores:
+            id_usuario, valor, email, nome_completo, _, _ = row
             try:
                 payload_completo, link = gerar_pix_funcao(razao_social, valor, chave_pix, cidade)
                 data_envio = datetime.now()
                 data_limite_str = (data_envio + timedelta(days=1)).strftime("%d/%m/%Y")
+
                 context = {
                     "nome_usuario": nome_completo,
                     "email_destinatario": email,
@@ -64,6 +87,7 @@ def Buscar_Usuario_Devedor():
                 print(f"Lembrete enviado para {email} (ID do usuário: {id_usuario})")
             except Exception as e:
                 print(f"Erro ao processar usuário {id_usuario}: {e}")
+
         cur.close()
 
 scheduler.add_job(

@@ -495,17 +495,15 @@ class CustomUsuarioPDF(FPDF):
         return "..."
 
 # Classe personalizada para gerar o PDF de Manutenções
-class CustomManutencaoPDF(FPDF) :
+class CustomManutencaoPDF(FPDF):
     def __init__(self):
         super().__init__()
         self.set_title("Relatório de Manutenções")
         self.set_author("Sistema de Concessionária")
-
         # cores
-        self.primary_color = (56, 56, 56)  # Cinza
-        self.accent_color = (220, 50, 50)  # Vermelho para destaques
-
-        # layout 3 colunas × 2 linhas
+        self.primary_color = (56, 56, 56)
+        self.accent_color = (220, 50, 50)
+        # layout 2 colunas × 2 linhas
         self.card_margin_x = 10
         self.card_margin_y = 40
         self.card_spacing_x = 8
@@ -514,8 +512,7 @@ class CustomManutencaoPDF(FPDF) :
         self.rows = 2
         usable_w = self.w - 2*self.card_margin_x - (self.cols-1)*self.card_spacing_x
         self.card_w = usable_w/self.cols
-        self.card_h = 90
-
+        self.card_h = 100
         # fontes
         self.line_h = 6
         self.font_norm = 11
@@ -539,119 +536,109 @@ class CustomManutencaoPDF(FPDF) :
         self.cell(0,10,f"Página {self.page_no()}/{{nb}}",0,0,'C')
 
     def create_manutencao_cards(self, manutencoes):
-        """
-        Renderiza cards de manutenção em grid 2×2. Se não houver dados,
-        exibe apenas uma página com aviso e total = 0.
-        """
         self.alias_nb_pages()
         total = len(manutencoes)
 
-        # ——————————————————————————————————————————
-        # Caso NÃO haja manutenções, gera só uma página com mensagem + total
+        # Se não houver manutenções, exibe mensagem
         if total == 0:
-            self.add_page()  # dispara header()
-            self.ln(10)  # espaçamento após o header
-
+            self.add_page()
+            self.ln(10)
             self.set_font("Arial", "", 12)
-            self.cell(
-                0, 10,
-                "Nenhuma manutenção encontrada para os critérios informados.",
-                ln=True, align="C"
-            )
-
+            self.cell(0, 10, "Nenhuma manutenção encontrada para os critérios informados.", ln=True, align="C")
             self.ln(8)
             self.set_font("Arial", "B", 14)
-            self.cell(
-                0, 10,
-                f"Total de manutenções: {total}",
-                ln=True, align="C"
-            )
+            self.cell(0, 10, f"Total de manutenções: {total}", ln=True, align="C")
             return
 
-        # ——————————————————————————————————————————
-        # Se houver dados, prepara grid
         per_page = self.cols * self.rows
-
         for i, m in enumerate(manutencoes):
-            # nova página a cada per_page
             if i % per_page == 0:
                 self.add_page()
-
-            # coluna e linha dentro da página
             col = i % self.cols
             row = (i % per_page) // self.cols
-
             x = self.card_margin_x + col * (self.card_w + self.card_spacing_x)
             y = self.card_margin_y + row * (self.card_h + self.card_spacing_y)
-
             self._draw_card(m, x, y)
 
-        # ——————————————————————————————————————————
-        # Imprime o total na última página (20 pts acima do rodapé)
+        # total ao final
         self.set_xy(self.card_margin_x, self.h - 20)
         self.set_font("Arial", "B", 12)
         self.cell(0, 10, f"Total de manutenções: {total}", 0, 0, 'C')
 
     def _draw_card(self, m, x, y):
+        # retângulo de fundo; altura dinâmica baseada em serviços e observação
+        base_h = self.card_h
         self.set_fill_color(240, 240, 240)
-        self.rect(x, y, self.card_w, self.card_h, 'F')
-        cx = x + 4
-        cy = y + 6
+        self.rect(x, y, self.card_w, base_h, 'F')
+        cx, cy = x+4, y+6
 
-        # tipo do veículo
-        tp = 'Carro' if m['tipo_veiculo'] == 1 else 'Moto'
+        # Tipo e detalhes do veículo
+        tp = 'Carro' if m['tipo_veiculo']==1 else 'Moto'
         self.set_xy(cx, cy)
-        self.set_font("Arial", "B", self.font_bold)
-        self.set_text_color(*self.primary_color)
-        self.cell(0, self.line_h, f"{tp}:", 0, 1)
-
-        # detalhes do veículo
-        self.set_font("Arial", "", self.font_norm)
-        info = [
-            f"Marca/Modelo: {format_none(m.get('marca'))} {format_none(m.get('modelo'))}",
-            f"Ano Fab.: {format_date(m.get('ano_fabricacao'))}",
-            f"Ano Mod.: {format_date(m.get('ano_modelo'))}",
-            f"Placa: {format_none(m.get('placa'))}"
+        self.set_font("Arial","B",self.font_bold)
+        self.set_text_color(*self.accent_color)
+        self.cell(0,self.line_h, f"{tp}:",0,1)
+        self.set_font("Arial","",self.font_norm)
+        details = [
+            f"Marca/Modelo: {format_none(m['marca'])} {format_none(m['modelo'])}",
+            f"Ano Fab.: {format_date(m['ano_fabricacao'])}",
+            f"Ano Mod.: {format_date(m['ano_modelo'])}",
+            f"Placa: {format_none(m['placa'])}"
         ]
-
-        for line in info:
+        for line in details:
             cy += self.line_h + 1
             self.set_xy(cx, cy)
             self.cell(0, self.line_h, line, 0, 1)
 
-        # valor
+        # Valor e Data
         cy += self.line_h + 2
         self.set_xy(cx, cy)
-        self.set_font("Arial", "B", self.font_bold)
-        self.cell(45, self.line_h, "Valor da manutenção:")
-        self.set_font("Arial", "", self.font_norm)
-        self.cell(0, self.line_h, format_currency(m['valor_total']), 0, 1)
-
-        # data
-        cy += self.line_h + 2
-        self.set_xy(cx, cy)
-        self.set_font("Arial", "B", self.font_bold)
-        self.cell(12, self.line_h, "Data:")
-        self.set_font("Arial", "", self.font_norm)
-        self.cell(0, self.line_h, format_date(m['data_manutencao']), 0, 1)
-
-        # observação
-        cy += self.line_h + 2
-        self.set_xy(cx, cy)
-        self.set_font("Arial", "B", self.font_bold)
-        self.cell(0, self.line_h, "Observação:")
+        self.set_font("Arial","B",self.font_bold)
+        self.cell(25,self.line_h, "Valor:")
+        self.set_font("Arial","",self.font_norm)
+        self.cell(0,self.line_h, format_currency(m['valor_total']), 0, 1)
 
         cy += self.line_h + 1
         self.set_xy(cx, cy)
-        self.set_font("Arial", "", self.font_norm)
+        self.set_font("Arial","B",self.font_bold)
+        self.cell(25, self.line_h, "Data:")
+        self.set_font("Arial","",self.font_norm)
+        self.cell(0, self.line_h, format_date(m['data_manutencao']), 0, 1)
 
-        before_obs_y = cy
-        self.multi_cell(self.card_w - 8, self.line_h, format_none(m['observacao']))
-        after_obs_y = self.get_y()
+        # Observação antes dos serviços
+        cy += self.line_h + 2
+        self.set_xy(cx, cy)
+        self.set_font("Arial","B",self.font_bold)
+        self.cell(0, self.line_h, "Observação:")
+        cy += self.line_h + 1
+        self.set_xy(cx, cy)
+        self.set_font("Arial","",self.font_norm)
+        self.multi_cell(self.card_w-8, self.line_h, format_none(m['observacao']))
+        after_obs = self.get_y()
+        if after_obs > y + base_h:
+            base_h = after_obs - y + 6
 
-        if after_obs_y > y + self.card_h:
-            self.card_h = after_obs_y - y + 6  # atualiza a altura do card dinamicamente
+        # Serviços (abaixo da observação)
+        if m.get('servicos'):
+            cy = after_obs + 2
+            self.set_xy(cx, cy)
+            self.set_font("Arial","B",self.font_bold)
+            self.cell(0, self.line_h, "Serviços:")
+            for serv in m['servicos']:
+                cy += self.line_h + 1
+                self.set_xy(cx+4, cy)
+                self.set_font("Arial","",self.font_norm)
+                self.multi_cell(self.card_w-10, self.line_h, f"- {serv['descricao']}: {format_currency(serv['valor'])}")
+                after_serv = self.get_y()
+                if after_serv > y + base_h:
+                    base_h = after_serv - y + 6
 
+        # redesenha o fundo para nova altura, se mudou
+        if base_h != self.card_h:
+            self.rect(x, y, self.card_w, base_h, 'F')
+            self.card_h = base_h
+        # reposiciona ponteiro pro próximo card
+        self.set_xy(0, y)
 
 # Fim das Classes
 
@@ -820,91 +807,94 @@ def criar_pdf_usuarios():
 
 @app.route('/relatorio/manutencao', methods=['GET'])
 def criar_pdf_manutencao():
-    tipo_veic = request.args.get('tipo-veic', '').strip()  # '', 'Carros' ou 'Motos'
+    tipo_veic = request.args.get('tipo-veic', '').strip()
     dia = request.args.get('dia', '').strip()
     mes = request.args.get('mes', '').strip()
     ano = request.args.get('ano', '').strip()
 
-    # Query base
+    # Query principal (sem detalhes de veículo)
     query = """
-        SELECT ID_MANUTENCAO,
-               ID_VEICULO,
-               TIPO_VEICULO,
-               DATA_MANUTENCAO,
-               OBSERVACAO,
-               VALOR_TOTAL
-          FROM MANUTENCAO
-         WHERE ATIVO = TRUE
+         SELECT m.ID_MANUTENCAO,
+               m.ID_VEICULO,
+               m.TIPO_VEICULO,
+               m.DATA_MANUTENCAO,
+               m.OBSERVACAO,
+               m.VALOR_TOTAL,
+               s.DESCRICAO,
+               s.VALOR
+          FROM MANUTENCAO m
+          LEFT JOIN MANUTENCAO_SERVICOS ms ON ms.ID_MANUTENCAO = m.ID_MANUTENCAO
+          LEFT JOIN SERVICOS s ON s.ID_SERVICOS = ms.ID_SERVICOS
+         WHERE m.ATIVO = TRUE
     """
     params = []
-
-    # Filtro por tipo de veículo
     if tipo_veic.lower() == 'carros':
-        query += " AND TIPO_VEICULO = ?"
+        query += " AND m.TIPO_VEICULO = ?"
         params.append(1)
     elif tipo_veic.lower() == 'motos':
-        query += " AND TIPO_VEICULO = ?"
+        query += " AND m.TIPO_VEICULO = ?"
         params.append(2)
-
-    # Filtros por dia, mês e ano usando EXTRACT
     if dia:
-        query += " AND EXTRACT(DAY   FROM DATA_MANUTENCAO) = ?"
+        query += " AND EXTRACT(DAY FROM m.DATA_MANUTENCAO) = ?"
         params.append(int(dia))
     if mes:
-        query += " AND EXTRACT(MONTH FROM DATA_MANUTENCAO) = ?"
+        query += " AND EXTRACT(MONTH FROM m.DATA_MANUTENCAO) = ?"
         params.append(int(mes))
     if ano:
-        query += " AND EXTRACT(YEAR  FROM DATA_MANUTENCAO) = ?"
+        query += " AND EXTRACT(YEAR FROM m.DATA_MANUTENCAO) = ?"
         params.append(int(ano))
 
-    # Executa a consulta
     cursor = con.cursor()
     cursor.execute(query, params)
     rows = cursor.fetchall()
     cursor.close()
 
-    # Converte tuplas em dicionários
-    manutencoes = []
-    for id_m, id_v, tp, dt, obs, val in rows:
-        c = con.cursor()
-        if tp == 1:
-            c.execute(
-                'SELECT marca, modelo, ano_fabricacao, ano_modelo, placa '
-                'FROM CARROS WHERE id_carro = ?', (id_v,)
-            )
-        else:
-            c.execute(
-                'SELECT marca, modelo, ano_fabricacao, ano_modelo, placa '
-                'FROM MOTOS WHERE id_moto = ?', (id_v,)
-            )
-        veh = c.fetchone() or (None,)*5
-        c.close()
+    # Agrupa manutenções, serviços e busca detalhes do veículo
+    temp = {}
+    for id_m, id_v, tp, dt, obs, val, desc, serv_val in rows:
+        if id_m not in temp:
+            # busca dados do veículo
+            vc = con.cursor()
+            if tp == 1:
+                vc.execute('SELECT marca, modelo, ano_fabricacao, ano_modelo, placa FROM CARROS WHERE ID_CARRO = ?', (id_v,))
+            else:
+                vc.execute('SELECT marca, modelo, ano_fabricacao, ano_modelo, placa FROM MOTOS WHERE ID_MOTO = ?', (id_v,))
+            veh = vc.fetchone() or (None, None, None, None, None)
+            vc.close()
+            temp[id_m] = {
+                'id_manutencao': id_m,
+                'id_veiculo': id_v,
+                'tipo_veiculo': tp,
+                'data_manutencao': dt,
+                'observacao': obs,
+                'valor_total': val,
+                'marca': veh[0],
+                'modelo': veh[1],
+                'ano_fabricacao': veh[2],
+                'ano_modelo': veh[3],
+                'placa': veh[4],
+                'servicos': []
+            }
+        # adiciona serviço se existir
+        if desc:
+            temp[id_m]['servicos'].append({'descricao': desc, 'valor': serv_val})
 
-        manutencoes.append({
-            'id_manutencao':   id_m,
-            'id_veiculo':      id_v,
-            'tipo_veiculo':    tp,
-            'data_manutencao': dt,
-            'observacao':      obs,
-            'valor_total':     val,
-            'marca':           veh[0],
-            'modelo':          veh[1],
-            'ano_fabricacao':  veh[2],
-            'ano_modelo':      veh[3],
-            'placa':           veh[4],
-        })
+    manutencoes = list(temp.values())
 
-    # Gera o PDF — se a lista estiver vazia, seu create_manutencao_cards exibe a página única de "nenhuma manutenção"
+    # Gera PDF
     pdf = CustomManutencaoPDF()
     pdf.create_manutencao_cards(manutencoes)
-    filename = "relatorio_manutencoes.pdf"
+    filename = f"relatorio_manutencoes.pdf"
     pdf.output(filename)
-
     return send_file(
         filename,
         mimetype='application/pdf',
         as_attachment=False,
-        download_name=f"Relatorio_Manutencoes_{datetime.now():%Y%m%d}.pdf"
+        download_name=filename
     )
+
+# Relatorio de Despesas e receitas
+# Relatorio de clientes e compras
+# Relatorio de financiamentos e parcelas pagas
 
 # Fim das Rotas
