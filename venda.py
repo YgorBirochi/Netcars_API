@@ -34,6 +34,11 @@ def compra_a_vista():
     try:
         cursor = con.cursor()
 
+        cursor.execute('SELECT 1 FROM VENDA_COMPRA WHERE ID_USUARIO = ? AND STATUS = 1', (id_usuario,))
+
+        if cursor.fetchone():
+            return jsonify({'error': 'Você já possui um financiamento em andamento.'})
+
         if tipo_veic == 1:
             cursor.execute('SELECT PRECO_VENDA FROM CARROS WHERE ID_CARRO = ?', (id_veic,))
         else:
@@ -46,7 +51,6 @@ def compra_a_vista():
 
         preco_venda = resposta[0]
 
-
         if tipo_veic == 1:
             cursor.execute('UPDATE CARROS SET ATIVO = 0 WHERE ID_CARRO = ?', (id_veic,))
         else:
@@ -54,13 +58,13 @@ def compra_a_vista():
 
         cursor.execute('''
                 INSERT INTO VENDA_COMPRA 
-                (TIPO_VENDA_COMPRA, VALOR_TOTAL, FORMA_PAGAMENTO, DATA_VENDA_COMPRA, ID_USUARIO, TIPO_VEICULO, ID_VEICULO)
-                VALUES (1, ?, 1, CURRENT_TIMESTAMP, ?, ?, ?)
+                (TIPO_VENDA_COMPRA, VALOR_TOTAL, FORMA_PAGAMENTO, DATA_VENDA_COMPRA, ID_USUARIO, TIPO_VEICULO, ID_VEICULO, STATUS)
+                VALUES (1, ?, 1, CURRENT_TIMESTAMP, ?, ?, ?, 2)
             ''', (preco_venda, id_usuario, tipo_veic, id_veic))
 
         con.commit()
 
-        return jsonify({'success': 'Compra efetuada com sucesso! Veja mais detalhes na seção de "Financiamento".'}), 200
+        return jsonify({'success': 'Compra efetuada com sucesso! Veja mais detalhes na seção de "Histórico de compras".'}), 200
     except Exception as e:
         print({"error": e})
         return jsonify({"error": e}), 400

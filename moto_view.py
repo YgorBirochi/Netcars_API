@@ -361,7 +361,7 @@ def get_moto():
         params.append(f"%{nomeMoto}%")
         params.append(f"%{nomeMoto}%")
 
-    conditions.append('ATIVO = 0')
+    conditions.append('ATIVO = 1')
     conditions.append('RESERVADO IS NOT TRUE')
 
     if conditions:

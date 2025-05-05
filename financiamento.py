@@ -1,7 +1,14 @@
 from flask import Flask, request, jsonify
-from main import app, con
+from main import app, con, senha_secreta
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+import jwt
+
+def remover_bearer(token):
+    if token.startswith('Bearer '):
+        return token[len('Bearer '):]
+    else:
+        return token
 
 JUROS = 0.01 # Juros de 1%
 
@@ -17,7 +24,12 @@ def calcular_financiamento(id_veic, tipo_veic, qnt_parcelas, entrada):
             'error': 'Tipo de veículo inválido.'
         }), 400
 
-    preco_venda = float(cursor.fetchone()[0])
+    resposta_veic = cursor.fetchone()
+
+    if not resposta_veic:
+        return jsonify({'error': 'Veículo não encontrado'}), 400
+
+    preco_venda = float(resposta_veic[0])
 
     if entrada >= preco_venda:
         return jsonify({
@@ -43,6 +55,7 @@ def calcular_financiamento(id_veic, tipo_veic, qnt_parcelas, entrada):
 
         lista_parcelas[num_parcela] = {
                                         'valor': round(parcela_nova, 2),
+                                        'valor_amortizado': round(parcela_inicial, 2),
                                         'data': data_pagamento
                                       }
 
@@ -72,79 +85,73 @@ def obter_parcelas_financiamento(id_veic, tipo_veic, qnt_parcelas, entrada):
 
 @app.route('/financiamento', methods=['POST'])
 def financiamento():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
     data = request.get_json()
 
     # Dados recebidos
-    id_usuario = data.get('id_usuario')
-    id_carro = data.get('id_carro')
-    id_moto = data.get('id_moto')  # será None se não existir
-    n = int(data.get('numero_parcelas'))
-    PV = float(data.get('valor_financiamento'))
+    id_veic = data.get('id_veiculo')
+    tipo_veic = data.get('tipo_veiculo')
+    qnt_parcelas = data.get('qnt_parcelas')
+    entrada = data.get('entrada')
 
-    # Taxa fixa mensal (3,5%)
-    i = 0.035
+    if entrada is None or qnt_parcelas is None or id_veic is None or tipo_veic is None:
+        return jsonify({'error': 'Dados incompletos'}),400
 
-    # Cálculo da parcela fixa (Sistema Price)
-    PMT = PV * (i * (1 + i) ** n) / ((1 + i) ** n - 1)
+    # Separando a resposta e o status
+    response_obj, status_code = calcular_financiamento(id_veic, tipo_veic, qnt_parcelas, entrada)
+    dados = response_obj.get_json()
 
-    # Pré-cálculo de juros e amortizações (Price)
-    juros_list = []
-    amort_list = []
-    saldo = PV
-    for _ in range(n):
-        juros = saldo * i
-        amort = PMT - juros
-        juros_list.append(round(juros, 2))
-        amort_list.append(round(amort, 2))
-        saldo -= amort
+    if status_code != 200:
+        return response_obj, status_code
 
-    # Inverte lógica: últimas amortizações são menores que as primeiras
-    juros_list.reverse()
-    amort_list.reverse()
+    valor_total = dados.get('valor_total')
+    lista_parcelas = dados.get('lista_parcelas')
 
-    # Data inicial de vencimento (pode vir no JSON também)
-    vencimento_base = datetime.strptime(data.get('data_base', '2025-05-12'), '%Y-%m-%d')
-
-    cur = con.cursor()
     try:
-        # Inserção de cada parcela com lógica invertida
-        for mes in range(1, n + 1):
-            juros_mes = juros_list[mes - 1]
-            amortizacao = amort_list[mes - 1]
+        cursor = con.cursor()
 
-            data_vencimento = vencimento_base + relativedelta(months=mes - 1)
-            data_pagamento = data_vencimento + timedelta(days=10)
+        cursor.execute('''
+            INSERT INTO FINANCIAMENTO
+            (ID_USUARIO, VALOR_TOTAL, ENTRADA, QNT_PARCELAS, TIPO_VEICULO, ID_VEICULO)
+            VALUES(?, ?, ?, ?, ?, ?) RETURNING ID_FINANCIAMENTO
+        ''', (id_usuario, valor_total, entrada, qnt_parcelas, tipo_veic, id_veic))
 
-            cur.execute(
-                """
-                INSERT INTO FINANCIAMENTOS (
-                    ID_USUARIO,
-                    ID_CARRO,
-                    ID_MOTO,
-                    NUMERO_DA_PARCELA,
-                    VALOR_DA_PARCELA,
-                    VALOR_DA_PARCELA_AMORTIZADA,
-                    STATUS,
-                    DATA_VENCIMENTO,
-                    DATA_PAGAMENTO
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+        id_financiamento = cursor.fetchone()[0]
+
+        # Depois de extrair valor_total e lista_parcelas...
+        for num_parcela, parcela in lista_parcelas.items():
+            cursor.execute(
+                '''
+                INSERT INTO FINANCIAMENTO_PARCELA
+                  (ID_FINANCIAMENTO, NUM_PARCELA, VALOR_PARCELA,
+                   VALOR_PARCELA_AMORTIZADA, DATA_VENCIMENTO, STATUS)
+                VALUES(?, ?, ?, ?, ?, 1)
+                ''',
                 (
-                    id_usuario,
-                    id_carro,
-                    id_moto,
-                    mes,
-                    round(PMT, 2),
-                    amortizacao,
-                    'PENDENTE',
-                    data_vencimento.date(),
-                    data_pagamento.date()
+                    id_financiamento,
+                    num_parcela,
+                    parcela.get('valor'),
+                    parcela.get('valor_amortizado'),
+                    parcela.get('data')
                 )
             )
 
         con.commit()
-        return jsonify({'status': 'sucesso', 'mensagem': 'Parcelas geradas com sucesso.'}), 200
+
+        return jsonify({'success': 'Seu parcelamento foi gerado com sucesso! Veja mais detalhes na seção "financiamento".'}), 200
 
     except Exception as e:
         con.rollback()
-        return jsonify({'status': 'erro', 'mensagem': str(e)}), 400
+        return jsonify({'error': str(e)}), 400
