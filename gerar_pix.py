@@ -4,9 +4,10 @@ from main import app, con, senha_app_email, senha_secreta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from threading import Thread
-from io import BytesIO
 from datetime import datetime, timedelta
+from flask_apscheduler import APScheduler
 from PIL import Image
+from io import BytesIO
 import os
 import crcmod
 import qrcode
@@ -14,69 +15,162 @@ import smtplib
 import jwt
 import requests
 
+class Config:
+    SCHEDULER_API_ENABLED = True
 
-def remover_bearer(token):
-    if token.startswith('Bearer '):
-        return token[len('Bearer '):]
-    else:
-        return token
+app.config.from_object(Config())
+scheduler = APScheduler()
+scheduler.init_app(app)
 
-def enviar_email_qrcode(email_destinatario, dados_user, nome_usuario, payload_completo):
-    app_context = current_app._get_current_object()
+def Buscar_Usuario_Devedor():
+    with app.app_context():
+        cur = con.cursor()
+        cur.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
+        empresa = cur.fetchone()
+        razao_social = empresa[0]
+        chave_pix = empresa[1]
+        cidade = empresa[2]
+
+        cur = con.cursor()
+        cur.execute("""SELECT  F.ID_USUARIO, F.VALOR_DA_PARCELA, u.EMAIL, u.nome_completo FROM FINANCIAMENTOS f
+                    LEFT JOIN USUARIO u ON u.ID_USUARIO = f.ID_USUARIO 
+                    WHERE f.DATA_VENCIMENTO = CURRENT_DATE + 3
+                    AND f.DATA_PAGAMENTO  IS NULL  """)
+        devedores = cur.fetchall()
+        cur.close()
+
+        for id_usuario, valor, email, nome_completo in devedores:
+            try:
+                payload_completo, link = gerar_pix_funcao(razao_social, valor, chave_pix, cidade)
+                data_envio = datetime.now()
+                data_limite_str = (data_envio + timedelta(days=1)).strftime("%d/%m/%Y")
+                context = {
+                    "nome_usuario": nome_completo,
+                    "email_destinatario": email,
+                    "dados_user": {"nome": nome_completo, "email": email, "qrcode_url": link, "valor": valor},
+                    "payload_completo": payload_completo,
+                    "data_limite_str": data_limite_str,
+                    "endereco_concessionaria": "Av. Exemplo, 1234 - Centro, Cidade Fictícia",
+                    "ano": datetime.now().year
+                }
+
+                enviar_email_qrcode(
+                    to=email,
+                    subject="Lembrete de pagamento - NetCars",
+                    template="email_lembrete.html",
+                    context=context
+                )
+
+                print(f"Lembrete enviado para {email} (RG do usuário: {id_usuario})")
+            except Exception as e:
+                print(f"Erro ao processar usuário {id_usuario}: {e}")
+        cur.close()
+
+scheduler.add_job(
+    id='BuscarUsuarioDevedor',
+    func=Buscar_Usuario_Devedor,
+    trigger='interval',
+    minutes=1440
+)
+scheduler.start()
+
+
+def gerar_pix_funcao(nome: str, valor, chave_pix: str, cidade: str):
+
+    # Validação de parâmetros
+    if not nome or not valor or not chave_pix or not cidade:
+        raise ValueError("Nome, valor, chave_pix e cidade são obrigatórios")
+
+    # Formatação dos campos
+    valor_str = f"{float(valor):.2f}"
+    nome = nome[:25]
+    cidade = cidade[:15]
+
+    # Montagem do payload PIX (TLV + CRC)
+    merchant_info = format_tlv("00", "br.gov.bcb.pix") + format_tlv("01", chave_pix)
+    campo_26 = format_tlv("26", merchant_info)
+    payload_sem_crc = (
+        "000201"
+        "010212"
+        + campo_26
+        + "52040000"
+        + "5303986"
+        + format_tlv("54", valor_str)
+        + "5802BR"
+        + format_tlv("59", nome)
+        + format_tlv("60", cidade)
+        + format_tlv("62", format_tlv("05", "***"))
+        + "6304"
+    )
+    crc = calcula_crc16(payload_sem_crc)
+    payload_completo = payload_sem_crc + crc
+
+    # Geração do QR Code
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10,
+        border=4
+    )
+    qr.add_data(payload_completo)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    # Salvamento local
+    pasta = os.path.join(os.getcwd(), "upload", "qrcodes")
+    os.makedirs(pasta, exist_ok=True)
+    existentes = [f for f in os.listdir(pasta) if f.startswith("pix_") and f.endswith(".png")]
+    nums = [int(f.replace("pix_", "").replace(".png", "")) for f in existentes if f.replace("pix_", "").replace(".png", "").isdigit()]
+    prox = (max(nums) if nums else 0) + 1
+    nome_arquivo = f"pix_{prox}.png"
+    caminho = os.path.join(pasta, nome_arquivo)
+    img.save(caminho)
+
+    client_id = '2b7b62f0f313a32'
+
+    # Upload para Imgur
+    headers = {'Authorization': f'Client-ID {client_id}'}
+    with open(caminho, 'rb') as f_img:
+        resp = requests.post(
+            'https://api.imgur.com/3/image',
+            headers=headers,
+            data={'type': 'image', 'title': 'Pix', 'description': 'QR Code PIX'},
+            files={'image': f_img}
+        )
+    if resp.status_code != 200:
+        raise ConnectionError(f"Erro no upload Imgur: {resp.status_code}")
+    link = resp.json().get('data', {}).get('link')
+
+    return payload_completo, link
+
+
+def enviar_email_qrcode(to: str, subject: str, template: str, context: dict):
+    remetente = 'netcars.contato@gmail.com'
+    senha = senha_app_email
+    servidor_smtp = 'smtp.gmail.com'
+    porta_smtp = 465
+
+    corpo = render_template(template, **context)
+
+    # Monta a mensagem com o corpo já fornecido
+    msg = MIMEMultipart()
+    msg['From'] = remetente
+    msg['To'] = to
+    msg['Subject'] = subject
+    msg.attach(MIMEText(corpo, 'html'))
 
     def task_envio():
         try:
-            remetente = 'netcars.contato@gmail.com'
-            senha = senha_app_email
-            servidor_smtp = 'smtp.gmail.com'
-            porta_smtp = 465
-
-            # Calcular data limite para pagamento
-            data_envio = datetime.now()
-            data_limite = data_envio + timedelta(days=1)
-            data_limite_str = data_limite.strftime("%d/%m/%Y")
-
-            endereco_concessionaria = "Av. Exemplo, 1234 - Centro, Cidade Fictícia"
-
-            # Montar o corpo do e-mail
-            assunto = "NetCars - Confirmação de Pagamento"
-
-            with app_context.app_context():
-                corpo_email = render_template(
-                    'email_pix.html',
-                    nome_usuario=nome_usuario,
-                    email_destinatario=email_destinatario,
-                    dados_user=dados_user,
-                    payload_completo=payload_completo,
-                    data_limite_str=data_limite_str,
-                    endereco_concessionaria=endereco_concessionaria,
-                    ano=datetime.now().year
-                )
-
-            # Configurando o cabeçalho do e-mail
-            msg = MIMEMultipart()
-            msg['From'] = remetente
-            msg['To'] = email_destinatario
-            msg['Subject'] = assunto
-            msg.attach(MIMEText(corpo_email, 'html'))
-
-            try:
-                # Usando SSL direto (mais confiável com Gmail)
-                server = smtplib.SMTP_SSL(servidor_smtp, porta_smtp, timeout=60)
-                server.set_debuglevel(1)  # Ative para debugging
-                server.ehlo()  # Identifica-se ao servidor
-                server.login(remetente, senha)
-                text = msg.as_string()
-                server.sendmail(remetente, email_destinatario, text)
-                server.quit()
-                print(f"E-mail de pagamento do pix enviado para {email_destinatario}")
-            except Exception as e:
-                print(f"Erro ao enviar e-mail de pagamento: {e}")
-
-        except Exception as e:
-            print(f"Erro na tarefa de envio do e-mail: {e}")
+            server = smtplib.SMTP_SSL(servidor_smtp, porta_smtp, timeout=60)
+            server.login(remetente, senha)
+            server.sendmail(remetente, to, msg.as_string())
+            server.quit()
+            print(f"E-mail enviado para {to}")
+        except Exception as err:
+            print(f"Erro ao enviar e-mail para {to}: {err}")
 
     Thread(target=task_envio, daemon=True).start()
+
 
 def calcula_crc16(payload):
     crc16 = crcmod.mkCrcFun(0x11021, initCrc=0xFFFF, rev=False)
@@ -85,6 +179,12 @@ def calcula_crc16(payload):
 
 def format_tlv(id, value):
     return f"{id}{len(value):02d}{value}"
+
+def remover_bearer(token):
+    if token.startswith('Bearer '):
+        return token[len('Bearer '):]
+    else:
+        return token
 
 
 @app.route('/gerar_pix', methods=['POST'])
@@ -126,130 +226,55 @@ def gerar_pix():
         if not resposta_veic:
             return jsonify({'error': 'Veículo não encontrado.'})
 
-        valor = f"{float(resposta_veic[0]):.2f}"
+        valor = float(resposta_veic[0])
 
         cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
         resultado = cursor.fetchone()
         cursor.close()
 
         if not resultado:
-            return jsonify({"erro": "Chave PIX não encontrada"}), 404
+            return jsonify({"erro": "Chave pix não encontrada"}), 404
 
         nome, chave_pix, cidade = resultado
-        nome = nome[:25] if nome else "Recebedor PIX"
-        cidade = cidade[:15] if cidade else "Cidade"
+        payload, link = gerar_pix_funcao(nome, valor, chave_pix, cidade)
 
-        # Monta o campo 26 (Merchant Account Information) com TLVs internos
-        merchant_account_info = (
-                format_tlv("00", "br.gov.bcb.pix") +
-                format_tlv("01", chave_pix)
-        )
-        campo_26 = format_tlv("26", merchant_account_info)
+        cursor = con.cursor()
+        cursor.execute("SELECT nome_completo, email, cpf_cnpj, telefone FROM usuario WHERE email = ?", (email,))
+        usuario = cursor.fetchone()
+        cursor.close()
 
-        payload_sem_crc = (
-                "000201" +  # Payload Format Indicator
-                "010212" +  # Point of Initiation Method
-                campo_26 +  # Merchant Account Information
-                "52040000" +  # Merchant Category Code
-                "5303986" +  # Currency - 986 = BRL
-                format_tlv("54", valor) +  # Transaction amount
-                "5802BR" +  # Country Code
-                format_tlv("59", nome) +  # Merchant Name
-                format_tlv("60", cidade) +  # Merchant City
-                format_tlv("62", format_tlv("05", "***")) +  # Additional data (TXID)
-                "6304"  # CRC placeholder
-        )
+        if not usuario:
+            return jsonify({"erro": "Usuário não encontrado"}), 404
 
-        crc = calcula_crc16(payload_sem_crc)
-        payload_completo = payload_sem_crc + crc
+        nome_usuario, email_usuario, cpf_usuario, telefone_usuario = usuario
+        data_envio = datetime.now()
+        data_limite = data_envio + timedelta(days=1)
+        data_limite_str = data_limite.strftime("%d/%m/%Y")
 
-        # Criação do QR Code com configurações aprimoradas
-        qr_obj = qrcode.QRCode(
-            version=None,  # Permite ajuste automático da versão
-            error_correction=ERROR_CORRECT_H,  # Alta correção de erros (30%)
-            box_size=10,
-            border=4
-        )
-        qr_obj.add_data(payload_completo)
-        qr_obj.make(fit=True)
-        qr = qr_obj.make_image(fill_color="black", back_color="white")
-
-        # Cria a pasta 'upload/qrcodes' relativa ao diretório do projeto
-        pasta_qrcodes = os.path.join(os.getcwd(), "upload", "qrcodes")
-        os.makedirs(pasta_qrcodes, exist_ok=True)
-
-        # Conta quantos arquivos já existem com padrão 'pix_*.png'
-        arquivos_existentes = [f for f in os.listdir(pasta_qrcodes) if f.startswith("pix_") and f.endswith(".png")]
-        numeros_usados = []
-        for nome_arq in arquivos_existentes:
-            try:
-                num = int(nome_arq.replace("pix_", "").replace(".png", ""))
-                numeros_usados.append(num)
-            except ValueError:
-                continue
-        proximo_numero = max(numeros_usados, default=0) + 1
-        nome_arquivo = f"pix_{proximo_numero}.png"
-        caminho_arquivo = os.path.join(pasta_qrcodes, nome_arquivo)
-
-        # Salva o QR Code no disco
-        qr.save(caminho_arquivo)
-
-        # Substitua pelo seu Client-ID
-        client_id = '2b7b62f0f313a32'
-
-        headers = {
-            'Authorization': f'Client-ID {client_id}',
+        context = {
+            'nome_usuario': nome_usuario,
+            'email_destinatario': email_usuario,
+            'dados_user': {
+                'nome': nome_usuario,
+                'email': email_usuario,
+                'cpf': cpf_usuario,
+                'telefone': telefone_usuario,
+                'qrcode_url': link,
+                'valor': f"{valor:.2f}"
+            },
+            'payload_completo': payload,
+            'data_limite_str': data_limite_str,
+            'endereco_concessionaria': "Av. Exemplo, 1234 - Centro, Cidade Fictícia",
+            'ano': datetime.now().year
         }
 
-        url = 'https://api.imgur.com/3/image'
+        corpo_email = render_template('email_pix.html', **context)
 
-        # Abre a imagem e envia
-        with open(caminho_arquivo, 'rb') as image_file:
-            data = {
-                'type': 'image',
-                'title': 'Pix',
-                'description': 'Pagamento de Teste'
-            }
-            files = {
-                'image': image_file
-            }
-            response = requests.post(url, headers=headers, data=data, files=files)
+        enviar_email_qrcode(email, "NetCars - Confirmação de Pagamento",'email_pix.html',context )
 
-        # Mostra a resposta
-        print(response.status_code)
-        print(response.json())
-
-        # Verifica o status e exibe o link
-        if response.status_code == 200:
-            json_response = response.json()
-            image_link = json_response['data']['link']
-            print(f' Upload feito com sucesso! Link da imagem: {image_link}')
-
-            cursor = con.cursor()
-            cursor.execute("SELECT nome_completo, email, cpf_cnpj, telefone FROM usuario WHERE email = ?", (email,))
-            usuario = cursor.fetchone()
-            cursor.close()
-
-            if not usuario:
-                return jsonify({"erro": "Usuário não encontrado"}), 404
-
-            nome_usuario, email_usuario, cpf_usuario, telefone_usuario = usuario
-
-            dados_user = {
-                "nome": nome_usuario,
-                "email": email_usuario,
-                "cpf": cpf_usuario,
-                "telefone": telefone_usuario,
-                "qrcode_url": image_link,
-                "valor": valor
-            }
-
-            enviar_email_qrcode(email, dados_user, nome_usuario, payload_completo)
-
-            return send_file(caminho_arquivo, mimetype='image/png', as_attachment=True, download_name=nome_arquivo)
-        else:
-            print(f' Erro no upload! Código: {response.status_code}')
-            print(response.text)
+        caminho = os.path.join(os.getcwd(), "upload", "qrcodes",
+                               os.listdir(os.path.join(os.getcwd(), "upload", "qrcodes"))[-1])
+        return send_file(caminho, mimetype='image/png', as_attachment=True, download_name=os.path.basename(caminho))
 
     except Exception as e:
-        return jsonify({"erro": f"Ocorreu um erro internosse: {str(e)}"}), 500
+        return jsonify({"erro": f"Ocorreu um erro interno: {str(e)}"}), 500
