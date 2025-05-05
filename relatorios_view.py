@@ -4,7 +4,6 @@ from fpdf import FPDF
 from datetime import datetime
 import re
 
-
 # Funções de formatação
 
 def format_none(value):
