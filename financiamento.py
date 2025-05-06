@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from main import app, con, senha_secreta
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
@@ -276,8 +276,8 @@ def buscar_financiamento():
             "dados_veiculo": json_veiculo
         })
 
-@app.route('/gerar_qrcode_parcela/recente')
-def pagar_parcela():
+@app.route('/gerar_qrcode_parcela/recente', methods=['GET'])
+def gerar_qrcode_parcela_atual():
     token = request.headers.get('Authorization')
     if not token:
         return jsonify({'error': 'Token de autenticação necessário'}), 401
@@ -305,30 +305,20 @@ def pagar_parcela():
     cursor.execute('''
         SELECT FIRST 1
            ID_FINANCIAMENTO_PARCELA,
-           NUM_PARCELA,
-           VALOR_PARCELA,
-           VALOR_PARCELA_AMORTIZADA,
-           DATA_VENCIMENTO,
-           DATA_PAGAMENTO,
-           STATUS
+           VALOR_PARCELA
         FROM FINANCIAMENTO_PARCELA
         WHERE ID_FINANCIAMENTO = ?
         AND STATUS != 3
         ORDER BY DATA_VENCIMENTO ASC;
     ''', (id_financiamento,))
 
-    result_parc = cursor.fetchall()
+    result_parc = cursor.fetchone()
 
     if not result_parc:
         return jsonify({'error': 'Nenhuma parcela encontrada'})
 
     id_parcela = int(result_parc[0])
-    num_parcela = int(result_parc[1])
-    valor_parcela = float(result_parc[2])
-    valor_parcela_amortizada = float(result_parc[3])
-    data_venc = result_parc[4]
-    data_pag = result_parc[5]
-    status = result_parc[6]
+    valor_parcela = float(result_parc[1])
 
     cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
     resultado = cursor.fetchone()
@@ -337,9 +327,106 @@ def pagar_parcela():
         return jsonify({"erro": "Chave pix não encontrada"}), 404
 
     nome, chave_pix, cidade = resultado
-    payload, link = gerar_pix_funcao(nome, valor_parcela, chave_pix, cidade)
+    gerar_pix_funcao(nome, valor_parcela, chave_pix, cidade)
 
     caminho = os.path.join(os.getcwd(), "upload", "qrcodes",
                            os.listdir(os.path.join(os.getcwd(), "upload", "qrcodes"))[-1])
 
-    return send_file(caminho, mimetype='image/png', as_attachment=True, download_name=os.path.basename(caminho))
+    response = make_response(send_file(
+        caminho,
+        mimetype='image/png',
+        as_attachment=True,
+        download_name=os.path.basename(caminho)
+    ))
+    response.headers['ID-PARCELA'] = str(id_parcela)
+    response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA'
+    return response
+
+@app.route('/gerar_qrcode_parcela/amortizar', methods=['GET'])
+def gerar_qrcode_parcela_amortizar():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    cursor.execute('SELECT ID_FINANCIAMENTO FROM FINANCIAMENTO WHERE ID_USUARIO = ?', (id_usuario,))
+
+    result_financ = cursor.fetchone()
+
+    if not result_financ:
+        return jsonify({'error': 'Nenhum financiamento encontrado.'}), 400
+
+    id_financiamento = result_financ[0]
+
+    cursor.execute('''
+        SELECT FIRST 1
+           ID_FINANCIAMENTO_PARCELA,
+           VALOR_PARCELA_AMORTIZADA
+        FROM FINANCIAMENTO_PARCELA
+        WHERE ID_FINANCIAMENTO = ?
+        AND STATUS != 3
+        ORDER BY DATA_VENCIMENTO DESC;
+    ''', (id_financiamento,))
+
+    result_parc = cursor.fetchone()
+
+    if not result_parc:
+        return jsonify({'error': 'Nenhuma parcela encontrada'})
+
+    id_parcela = int(result_parc[0])
+    valor_parcela_amortizada = float(result_parc[1])
+
+    cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
+    resultado = cursor.fetchone()
+
+    if not resultado:
+        return jsonify({"erro": "Chave pix não encontrada"}), 404
+
+    nome, chave_pix, cidade = resultado
+    gerar_pix_funcao(nome, valor_parcela_amortizada, chave_pix, cidade)
+
+    caminho = os.path.join(os.getcwd(), "upload", "qrcodes",
+                           os.listdir(os.path.join(os.getcwd(), "upload", "qrcodes"))[-1])
+
+    response = make_response(send_file(
+        caminho,
+        mimetype='image/png',
+        as_attachment=True,
+        download_name=os.path.basename(caminho)
+    ))
+    response.headers['ID-PARCELA'] = str(id_parcela)
+    response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA'
+    return response
+
+@app.route('/pagar_parcela/<int:id_parcela>', methods = ['GET'])
+def pagar_parcela(id_parcela):
+    cursor = con.cursor()
+
+    cursor.execute('SELECT 1 FROM FINANCIAMENTO_PARCELA WHERE ID_FINANCIAMENTO_PARCELA = ?', (id_parcela,))
+
+    if not cursor.fetchone():
+        return jsonify({ 'error': 'Parcela não encontrada.' }), 400
+
+    try:
+        cursor.execute('''
+            UPDATE FINANCIAMENTO_PARCELA SET STATUS = 3,
+            DATA_PAGAMENTO = CURRENT_TIMESTAMP 
+            WHERE ID_FINANCIAMENTO_PARCELA = ?
+        ''', (id_parcela,))
+
+        con.commit()
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    finally:
+        cursor.close()
+        return jsonify({'success': 'Parcela paga com sucesso!'}), 200
