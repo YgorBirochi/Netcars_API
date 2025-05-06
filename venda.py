@@ -37,7 +37,7 @@ def compra_a_vista():
         cursor.execute('SELECT 1 FROM VENDA_COMPRA WHERE ID_USUARIO = ? AND STATUS = 1', (id_usuario,))
 
         if cursor.fetchone():
-            return jsonify({'error': 'Você já possui um financiamento em andamento.'})
+            return jsonify({'error': 'Você já possui um financiamento em andamento.'}), 400
 
         if tipo_veic == 1:
             cursor.execute('SELECT PRECO_VENDA FROM CARROS WHERE ID_CARRO = ?', (id_veic,))
