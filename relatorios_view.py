@@ -576,7 +576,7 @@ class CustomManutencaoPDF(FPDF):
         tp = 'Carro' if m['tipo_veiculo']==1 else 'Moto'
         self.set_xy(cx, cy)
         self.set_font("Arial","B",self.font_bold)
-        self.set_text_color(*self.accent_color)
+        self.set_text_color(*self.primary_color)
         self.cell(0,self.line_h, f"{tp}:",0,1)
         self.set_font("Arial","",self.font_norm)
         details = [
@@ -812,14 +812,18 @@ def criar_pdf_manutencao():
     mes = request.args.get('mes', '').strip()
     ano = request.args.get('ano', '').strip()
 
-    # Query principal (sem detalhes de veículo)
+    # Query principal
     query = """
-         SELECT m.ID_MANUTENCAO,
+        SELECT m.ID_MANUTENCAO,
                m.ID_VEICULO,
                m.TIPO_VEICULO,
                m.DATA_MANUTENCAO,
                m.OBSERVACAO,
                m.VALOR_TOTAL,
+               ms.QUANTIDADE U,
+               ms.VALOR_TOTAL_ITEM,
+               ms.QUANTIDADE,
+               ms.VALOR_TOTAL_ITEM,
                s.DESCRICAO,
                s.VALOR
           FROM MANUTENCAO m
@@ -827,6 +831,7 @@ def criar_pdf_manutencao():
           LEFT JOIN SERVICOS s ON s.ID_SERVICOS = ms.ID_SERVICOS
          WHERE m.ATIVO = TRUE
     """
+
     params = []
     if tipo_veic.lower() == 'carros':
         query += " AND m.TIPO_VEICULO = ?"
