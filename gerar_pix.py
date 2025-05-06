@@ -20,7 +20,6 @@ scheduler = APScheduler()
 scheduler.init_app(app)
 
 def Buscar_Usuario_Devedor():
-    print('foi')
     with app.app_context():
         cur = con.cursor()
 
@@ -40,7 +39,8 @@ def Buscar_Usuario_Devedor():
             FROM FINANCIAMENTO_PARCELA fp
             LEFT JOIN FINANCIAMENTO f ON f.ID_FINANCIAMENTO = fp.ID_FINANCIAMENTO 
             LEFT JOIN USUARIO u ON u.ID_USUARIO = f.ID_USUARIO 
-            WHERE fp.DATA_VENCIMENTO = CURRENT_DATE + 3
+            WHERE fp.DATA_VENCIMENTO >= CURRENT_DATE + 3 
+            and fp.DATA_VENCIMENTO <= CURRENT_DATE + 35  
               AND fp.DATA_PAGAMENTO IS NULL
               AND COALESCE(fp.LEMBRETE, 0) = 0
         """)
