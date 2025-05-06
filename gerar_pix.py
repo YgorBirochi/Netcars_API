@@ -62,7 +62,7 @@ def Buscar_Usuario_Devedor():
         for row in devedores:
             id_usuario, valor, email, nome_completo, _, _ = row
             try:
-                payload_completo, link = gerar_pix_funcao(razao_social, valor, chave_pix, cidade)
+                payload_completo, link, nome_arquivo = gerar_pix_funcao(razao_social, valor, chave_pix, cidade)
                 data_envio = datetime.now()
                 data_limite_str = (data_envio + timedelta(days=1)).strftime("%d/%m/%Y")
 

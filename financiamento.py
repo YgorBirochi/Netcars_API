@@ -327,16 +327,16 @@ def gerar_qrcode_parcela_atual():
         return jsonify({"erro": "Chave pix não encontrada"}), 404
 
     nome, chave_pix, cidade = resultado
-    gerar_pix_funcao(nome, valor_parcela, chave_pix, cidade)
 
-    caminho = os.path.join(os.getcwd(), "upload", "qrcodes",
-                           os.listdir(os.path.join(os.getcwd(), "upload", "qrcodes"))[-1])
+    payload, link, nome_arquivo = gerar_pix_funcao(nome, valor_parcela, chave_pix, cidade)
+
+    caminho = os.path.join(os.getcwd(), "upload", "qrcodes", nome_arquivo)
 
     response = make_response(send_file(
         caminho,
         mimetype='image/png',
         as_attachment=True,
-        download_name=os.path.basename(caminho)
+        download_name=nome_arquivo
     ))
     response.headers['ID-PARCELA'] = str(id_parcela)
     response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA'
@@ -393,16 +393,15 @@ def gerar_qrcode_parcela_amortizar():
         return jsonify({"erro": "Chave pix não encontrada"}), 404
 
     nome, chave_pix, cidade = resultado
-    gerar_pix_funcao(nome, valor_parcela_amortizada, chave_pix, cidade)
+    payload, link, nome_arquivo = gerar_pix_funcao(nome, valor_parcela_amortizada, chave_pix, cidade)
 
-    caminho = os.path.join(os.getcwd(), "upload", "qrcodes",
-                           os.listdir(os.path.join(os.getcwd(), "upload", "qrcodes"))[-1])
+    caminho = os.path.join(os.getcwd(), "upload", "qrcodes", nome_arquivo)
 
     response = make_response(send_file(
         caminho,
         mimetype='image/png',
         as_attachment=True,
-        download_name=os.path.basename(caminho)
+        download_name=nome_arquivo
     ))
     response.headers['ID-PARCELA'] = str(id_parcela)
     response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA'
