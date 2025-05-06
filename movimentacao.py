@@ -57,13 +57,13 @@ def get_movimentacoes():
                 total_despesas += valor
 
             movimentacoes.append({
-                'ID_RECEITA_DESPESA':      mov[0],
-                'TIPO':                    tipo_texto,
-                'VALOR':                   valor,
-                'DATA_RECEITA_DESPESA':    mov[3],
-                'DESCRICAO':               mov[4],
-                'ID_ORIGEM':               mov[5],
-                'TABELA_ORIGEM':           mov[6]
+                'id_receita_despesa':      mov[0],
+                'tipo':                    tipo_texto,
+                'valor':                   valor,
+                'data_receita_despesa':    mov[3],
+                'descricao':               mov[4],
+                'id_origem':               mov[5],
+                'tabela_origem':           mov[6]
             })
 
         saldo = total_receitas - total_despesas
@@ -241,13 +241,11 @@ def post_movimentacao():
     valor = data.get('valor')
     data_mov = data.get('data')
     descricao = data.get('descricao')
-    id_origem = data.get('id_origem') or None  # Será fornecido pelo front quando necessário
-    tabela_origem = data.get('tabela_origem') or ""  # Será fornecido pelo front quando necessário
 
     # Validação de campos obrigatórios
     if not tipo or not valor or not data_mov or not descricao:
         return jsonify({
-            'error': 'Dados incompletos. Tipo, valor, data e descrição são obrigatórios.'
+            'error': 'Dados incompletos.'
         }), 400
 
     # Converter string tipo para o valor numérico
@@ -258,11 +256,11 @@ def post_movimentacao():
 
         cursor.execute('''
             INSERT INTO RECEITA_DESPESA 
-            (TIPO, VALOR, DATA_RECEITA_DESPESA, DESCRICAO, ID_ORIGEM, TABELA_ORIGEM)
+            (TIPO, VALOR, DATA_RECEITA_DESPESA, DESCRICAO)
             VALUES
-            (?, ?, ?, ?, ?, ?)
+            (?, ?, ?, ?)
             RETURNING ID_RECEITA_DESPESA
-        ''', (tipo_valor, valor, data_mov, descricao, id_origem, tabela_origem))
+        ''', (tipo_valor, valor, data_mov, descricao))
 
         id_movimentacao = cursor.fetchone()[0]
 
@@ -270,8 +268,8 @@ def post_movimentacao():
 
         # Resposta de sucesso
         return jsonify({
-            'success': 'Movimentação cadastrada com sucesso.',
-            'id': id_movimentacao,
+            'success': f'{tipo.capitalize()} cadastrada com sucesso!',
+            'id_receita_despesa': id_movimentacao,
             'tipo': tipo
         }), 200
     except Exception as e:
@@ -281,7 +279,6 @@ def post_movimentacao():
         }), 400
     finally:
         cursor.close()
-
 @app.route('/movimentacoes/<int:id_mov>', methods=['PUT'])
 def put_movimentacao(id_mov):
     token = request.headers.get('Authorization')

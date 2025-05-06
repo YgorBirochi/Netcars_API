@@ -222,7 +222,7 @@ def buscar_financiamento():
 
         cursor.execute('''
             SELECT NUM_PARCELA, VALOR_PARCELA, VALOR_PARCELA_AMORTIZADA, DATA_VENCIMENTO, DATA_PAGAMENTO, STATUS 
-            FROM FINANCIAMENTO_PARCELA WHERE ID_FINANCIAMENTO = ?
+            FROM FINANCIAMENTO_PARCELA WHERE ID_FINANCIAMENTO = ? ORDER BY DATA_VENCIMENTO ASC
         ''', (id_financiamento,))
 
         data_parcelas = cursor.fetchall()
