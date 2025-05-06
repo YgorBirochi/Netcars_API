@@ -511,10 +511,13 @@ def verificar_tipo_usuario():
 
     cursor.execute("SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?", (id_usuario,))
 
-    tipo_usuario = cursor.fetchone()[0]
+    tipo_usuario = cursor.fetchone()
+
+    if not tipo_usuario:
+        return jsonify({'error': 'Usuário não encontrado.'}), 400
 
     cursor.close()
 
     return jsonify({
-        'tipo_usuario': tipo_usuario
+        'tipo_usuario': tipo_usuario[0]
     })

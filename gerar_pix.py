@@ -1,19 +1,17 @@
-from flask import Flask, send_file, jsonify, request, current_app, render_template
-from qrcode.constants import ERROR_CORRECT_H
+from flask import Flask, send_file, jsonify, request, render_template
 from main import app, con, senha_app_email, senha_secreta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from threading import Thread
 from datetime import datetime, timedelta
 from flask_apscheduler import APScheduler
-from PIL import Image
-from io import BytesIO
 import os
 import crcmod
 import qrcode
 import smtplib
 import jwt
 import requests
+import uuid
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -42,7 +40,8 @@ def Buscar_Usuario_Devedor():
             FROM FINANCIAMENTO_PARCELA fp
             LEFT JOIN FINANCIAMENTO f ON f.ID_FINANCIAMENTO = fp.ID_FINANCIAMENTO 
             LEFT JOIN USUARIO u ON u.ID_USUARIO = f.ID_USUARIO 
-            WHERE fp.DATA_VENCIMENTO = CURRENT_DATE + 3
+            WHERE fp.DATA_VENCIMENTO >= CURRENT_DATE + 3 
+            and fp.DATA_VENCIMENTO <= CURRENT_DATE + 35  
               AND fp.DATA_PAGAMENTO IS NULL
               AND COALESCE(fp.LEMBRETE, 0) = 0
         """)
@@ -63,7 +62,7 @@ def Buscar_Usuario_Devedor():
         for row in devedores:
             id_usuario, valor, email, nome_completo, _, _ = row
             try:
-                payload_completo, link = gerar_pix_funcao(razao_social, valor, chave_pix, cidade)
+                payload_completo, link, nome_arquivo = gerar_pix_funcao(razao_social, valor, chave_pix, cidade)
                 data_envio = datetime.now()
                 data_limite_str = (data_envio + timedelta(days=1)).strftime("%d/%m/%Y")
 
@@ -142,10 +141,9 @@ def gerar_pix_funcao(nome: str, valor, chave_pix: str, cidade: str):
     # Salvamento local
     pasta = os.path.join(os.getcwd(), "upload", "qrcodes")
     os.makedirs(pasta, exist_ok=True)
-    existentes = [f for f in os.listdir(pasta) if f.startswith("pix_") and f.endswith(".png")]
-    nums = [int(f.replace("pix_", "").replace(".png", "")) for f in existentes if f.replace("pix_", "").replace(".png", "").isdigit()]
-    prox = (max(nums) if nums else 0) + 1
-    nome_arquivo = f"pix_{prox}.png"
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    unique_id = uuid.uuid4().hex  # ex: '9f1c2e3a4b5d6f7e8a9b0c1d2e3f4a5b'
+    nome_arquivo = f"pix_{unique_id}_{timestamp}.png"
     caminho = os.path.join(pasta, nome_arquivo)
     img.save(caminho)
 
@@ -164,7 +162,7 @@ def gerar_pix_funcao(nome: str, valor, chave_pix: str, cidade: str):
         raise ConnectionError(f"Erro no upload Imgur: {resp.status_code}")
     link = resp.json().get('data', {}).get('link')
 
-    return payload_completo, link
+    return payload_completo, link, nome_arquivo
 
 
 def enviar_email_qrcode(to: str, subject: str, template: str, context: dict):
@@ -259,7 +257,7 @@ def gerar_pix():
             return jsonify({"erro": "Chave pix não encontrada"}), 404
 
         nome, chave_pix, cidade = resultado
-        payload, link = gerar_pix_funcao(nome, valor, chave_pix, cidade)
+        payload, link, nome_arquivo = gerar_pix_funcao(nome, valor, chave_pix, cidade)
 
         cursor = con.cursor()
         cursor.execute("SELECT nome_completo, email, cpf_cnpj, telefone FROM usuario WHERE email = ?", (email,))
@@ -291,13 +289,10 @@ def gerar_pix():
             'ano': datetime.now().year
         }
 
-        corpo_email = render_template('email_pix.html', **context)
-
         enviar_email_qrcode(email, "NetCars - Confirmação de Pagamento",'email_pix.html',context )
 
-        caminho = os.path.join(os.getcwd(), "upload", "qrcodes",
-                               os.listdir(os.path.join(os.getcwd(), "upload", "qrcodes"))[-1])
-        return send_file(caminho, mimetype='image/png', as_attachment=True, download_name=os.path.basename(caminho))
+        caminho = os.path.join(os.getcwd(), "upload", "qrcodes", nome_arquivo)
+        return send_file(caminho, mimetype='image/png', as_attachment=True, download_name=nome_arquivo)
 
     except Exception as e:
         return jsonify({"erro": f"Ocorreu um erro interno: {str(e)}"}), 500

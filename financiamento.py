@@ -1,8 +1,9 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, make_response
 from main import app, con, senha_secreta
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 import jwt
+from gerar_pix import *
 
 def remover_bearer(token):
     if token.startswith('Bearer '):
@@ -98,6 +99,13 @@ def financiamento():
     except jwt.InvalidTokenError:
         return jsonify({'error': 'Token inválido'}), 401
 
+    cursor = con.cursor()
+
+    cursor.execute('SELECT 1 FROM FINANCIAMENTO WHERE ID_USUARIO = ?', (id_usuario,))
+
+    if cursor.fetchone():
+        return jsonify({'error': 'Você já possui um parcelamento em andamento.'}), 400
+
     data = request.get_json()
 
     # Dados recebidos
@@ -120,8 +128,6 @@ def financiamento():
     lista_parcelas = dados.get('lista_parcelas')
 
     try:
-        cursor = con.cursor()
-
         cursor.execute('''
             INSERT INTO FINANCIAMENTO
             (ID_USUARIO, VALOR_TOTAL, ENTRADA, QNT_PARCELAS, TIPO_VEICULO, ID_VEICULO)
@@ -269,3 +275,172 @@ def buscar_financiamento():
             "lista_parcelas": lista_parcelas,
             "dados_veiculo": json_veiculo
         })
+
+@app.route('/gerar_qrcode_parcela/recente', methods=['GET'])
+def gerar_qrcode_parcela_atual():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    cursor.execute('SELECT ID_FINANCIAMENTO FROM FINANCIAMENTO WHERE ID_USUARIO = ?', (id_usuario,))
+
+    result_financ = cursor.fetchone()
+
+    if not result_financ:
+        return jsonify({'error': 'Nenhum financiamento encontrado.'}), 400
+
+    id_financiamento = result_financ[0]
+
+    cursor.execute('''
+        SELECT FIRST 1
+           ID_FINANCIAMENTO_PARCELA,
+           VALOR_PARCELA
+        FROM FINANCIAMENTO_PARCELA
+        WHERE ID_FINANCIAMENTO = ?
+        AND STATUS NOT IN (3, 4)
+        ORDER BY DATA_VENCIMENTO ASC;
+    ''', (id_financiamento,))
+
+    result_parc = cursor.fetchone()
+
+    if not result_parc:
+        return jsonify({'error': 'Nenhuma parcela encontrada'})
+
+    id_parcela = int(result_parc[0])
+    valor_parcela = float(result_parc[1])
+
+    cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
+    resultado = cursor.fetchone()
+
+    if not resultado:
+        return jsonify({"erro": "Chave pix não encontrada"}), 404
+
+    nome, chave_pix, cidade = resultado
+
+    payload, link, nome_arquivo = gerar_pix_funcao(nome, valor_parcela, chave_pix, cidade)
+
+    caminho = os.path.join(os.getcwd(), "upload", "qrcodes", nome_arquivo)
+
+    response = make_response(send_file(
+        caminho,
+        mimetype='image/png',
+        as_attachment=True,
+        download_name=nome_arquivo
+    ))
+    response.headers['ID-PARCELA'] = str(id_parcela)
+    response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA'
+    return response
+
+@app.route('/gerar_qrcode_parcela/amortizar', methods=['GET'])
+def gerar_qrcode_parcela_amortizar():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    cursor.execute('SELECT ID_FINANCIAMENTO FROM FINANCIAMENTO WHERE ID_USUARIO = ?', (id_usuario,))
+
+    result_financ = cursor.fetchone()
+
+    if not result_financ:
+        return jsonify({'error': 'Nenhum financiamento encontrado.'}), 400
+
+    id_financiamento = result_financ[0]
+
+    cursor.execute('''
+        SELECT FIRST 1
+           ID_FINANCIAMENTO_PARCELA,
+           VALOR_PARCELA_AMORTIZADA
+        FROM FINANCIAMENTO_PARCELA
+        WHERE ID_FINANCIAMENTO = ?
+        AND STATUS NOT IN (3, 4)
+        ORDER BY DATA_VENCIMENTO DESC;
+    ''', (id_financiamento,))
+
+    result_parc = cursor.fetchone()
+
+    if not result_parc:
+        return jsonify({'error': 'Nenhuma parcela encontrada'})
+
+    id_parcela = int(result_parc[0])
+    valor_parcela_amortizada = float(result_parc[1])
+
+    cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
+    resultado = cursor.fetchone()
+
+    if not resultado:
+        return jsonify({"erro": "Chave pix não encontrada"}), 404
+
+    nome, chave_pix, cidade = resultado
+    payload, link, nome_arquivo = gerar_pix_funcao(nome, valor_parcela_amortizada, chave_pix, cidade)
+
+    caminho = os.path.join(os.getcwd(), "upload", "qrcodes", nome_arquivo)
+
+    response = make_response(send_file(
+        caminho,
+        mimetype='image/png',
+        as_attachment=True,
+        download_name=nome_arquivo
+    ))
+    response.headers['ID-PARCELA'] = str(id_parcela)
+    response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA'
+    return response
+
+@app.route('/pagar_parcela/<int:id_parcela>/<int:amortizada>', methods = ['GET'])
+def pagar_parcela(id_parcela, amortizada):
+    if id_parcela is None or amortizada is None or amortizada not in [0, 1]:
+        return jsonify({'error': 'Dados incorretos.'}), 400
+
+    cursor = con.cursor()
+
+    cursor.execute('SELECT 1 FROM FINANCIAMENTO_PARCELA WHERE ID_FINANCIAMENTO_PARCELA = ?', (id_parcela,))
+
+    if not cursor.fetchone():
+        return jsonify({'error': 'Parcela não encontrada.'}), 400
+
+    try:
+        if amortizada == 0:
+            cursor.execute('''
+                UPDATE FINANCIAMENTO_PARCELA SET STATUS = 3,
+                DATA_PAGAMENTO = CURRENT_TIMESTAMP 
+                WHERE ID_FINANCIAMENTO_PARCELA = ?
+            ''', (id_parcela,))
+
+            con.commit()
+
+            return jsonify({'success': 'Parcela paga com sucesso!'}), 200
+        else:
+            cursor.execute('''
+                UPDATE FINANCIAMENTO_PARCELA SET STATUS = 4,
+                DATA_PAGAMENTO = CURRENT_TIMESTAMP 
+                WHERE ID_FINANCIAMENTO_PARCELA = ?
+            ''', (id_parcela,))
+
+            con.commit()
+
+            return jsonify({'success': 'Parcela amortizada com sucesso!'}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    finally:
+        cursor.close()
