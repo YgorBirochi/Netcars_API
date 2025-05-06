@@ -308,7 +308,7 @@ def gerar_qrcode_parcela_atual():
            VALOR_PARCELA
         FROM FINANCIAMENTO_PARCELA
         WHERE ID_FINANCIAMENTO = ?
-        AND STATUS != 3
+        AND STATUS NOT IN (3, 4)
         ORDER BY DATA_VENCIMENTO ASC;
     ''', (id_financiamento,))
 
@@ -352,6 +352,7 @@ def gerar_qrcode_parcela_amortizar():
     try:
         payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
         id_usuario = payload['id_usuario']
+        email = payload['email']
     except jwt.ExpiredSignatureError:
         return jsonify({'error': 'Token expirado'}), 401
     except jwt.InvalidTokenError:
@@ -374,7 +375,7 @@ def gerar_qrcode_parcela_amortizar():
            VALOR_PARCELA_AMORTIZADA
         FROM FINANCIAMENTO_PARCELA
         WHERE ID_FINANCIAMENTO = ?
-        AND STATUS != 3
+        AND STATUS NOT IN (3, 4)
         ORDER BY DATA_VENCIMENTO DESC;
     ''', (id_financiamento,))
 
@@ -388,12 +389,45 @@ def gerar_qrcode_parcela_amortizar():
 
     cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
     resultado = cursor.fetchone()
+    cursor.close()
 
     if not resultado:
         return jsonify({"erro": "Chave pix não encontrada"}), 404
 
     nome, chave_pix, cidade = resultado
-    gerar_pix_funcao(nome, valor_parcela_amortizada, chave_pix, cidade)
+    payload, link = gerar_pix_funcao(nome, valor_parcela_amortizada, chave_pix, cidade)
+
+    cursor = con.cursor()
+    cursor.execute("SELECT nome_completo, email, cpf_cnpj, telefone FROM usuario WHERE email = ?", (email,))
+    usuario = cursor.fetchone()
+    cursor.close()
+
+    if not usuario:
+        return jsonify({"erro": "Usuário não encontrado"}), 404
+
+    nome_usuario, email_usuario, cpf_usuario, telefone_usuario = usuario
+    data_envio = datetime.now()
+    data_limite = data_envio + timedelta(days=1)
+    data_limite_str = data_limite.strftime("%d/%m/%Y")
+
+    context = {
+        'nome_usuario': nome_usuario,
+        'email_destinatario': email_usuario,
+        'dados_user': {
+            'nome': nome_usuario,
+            'email': email_usuario,
+            'cpf': cpf_usuario,
+            'telefone': telefone_usuario,
+            'qrcode_url': link,
+            'valor': f"{valor_parcela_amortizada:.2f}"
+        },
+        'payload_completo': payload,
+        'data_limite_str': data_limite_str,
+        'endereco_concessionaria': "Av. Exemplo, 1234 - Centro, Cidade Fictícia",
+        'ano': datetime.now().year
+    }
+
+    enviar_email_qrcode(email, "NetCars - Parcelamento", 'email_pix.html', context)
 
     caminho = os.path.join(os.getcwd(), "upload", "qrcodes",
                            os.listdir(os.path.join(os.getcwd(), "upload", "qrcodes"))[-1])
@@ -408,25 +442,40 @@ def gerar_qrcode_parcela_amortizar():
     response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA'
     return response
 
-@app.route('/pagar_parcela/<int:id_parcela>', methods = ['GET'])
-def pagar_parcela(id_parcela):
+@app.route('/pagar_parcela/<int:id_parcela>/<int:amortizada>', methods = ['GET'])
+def pagar_parcela(id_parcela, amortizada):
+    if id_parcela is None or amortizada is None or amortizada not in [0, 1]:
+        return jsonify({'error': 'Dados incorretos.'}), 400
+
     cursor = con.cursor()
 
     cursor.execute('SELECT 1 FROM FINANCIAMENTO_PARCELA WHERE ID_FINANCIAMENTO_PARCELA = ?', (id_parcela,))
 
     if not cursor.fetchone():
-        return jsonify({ 'error': 'Parcela não encontrada.' }), 400
+        return jsonify({'error': 'Parcela não encontrada.'}), 400
 
     try:
-        cursor.execute('''
-            UPDATE FINANCIAMENTO_PARCELA SET STATUS = 3,
-            DATA_PAGAMENTO = CURRENT_TIMESTAMP 
-            WHERE ID_FINANCIAMENTO_PARCELA = ?
-        ''', (id_parcela,))
+        if amortizada == 0:
+            cursor.execute('''
+                UPDATE FINANCIAMENTO_PARCELA SET STATUS = 3,
+                DATA_PAGAMENTO = CURRENT_TIMESTAMP 
+                WHERE ID_FINANCIAMENTO_PARCELA = ?
+            ''', (id_parcela,))
 
-        con.commit()
+            con.commit()
+
+            return jsonify({'success': 'Parcela paga com sucesso!'}), 200
+        else:
+            cursor.execute('''
+                UPDATE FINANCIAMENTO_PARCELA SET STATUS = 4,
+                DATA_PAGAMENTO = CURRENT_TIMESTAMP 
+                WHERE ID_FINANCIAMENTO_PARCELA = ?
+            ''', (id_parcela,))
+
+            con.commit()
+
+            return jsonify({'success': 'Parcela amortizada com sucesso!'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 400
     finally:
         cursor.close()
-        return jsonify({'success': 'Parcela paga com sucesso!'}), 200
