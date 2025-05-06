@@ -640,10 +640,113 @@ class CustomManutencaoPDF(FPDF):
         # reposiciona ponteiro pro próximo card
         self.set_xy(0, y)
 
+class CustomReceitaDespesaPDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        self.set_title("Relatório de Receitas e Despesas")
+        self.set_author("Sistema Financeiro")
+        # Cores e dimensões
+        self.primary_color = (56, 56, 56)
+        self.accent_color = (0, 102, 204)
+        self.line_height = 6
+        # Larguras das colunas: Data, Tipo, Descrição, Valor
+        self.col_widths = [30, 30, 100, 30]
+
+    def header(self):
+        # Título
+        self.set_font("Arial", "B", 14)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, 10, "Relatório de Receitas e Despesas", 0, 1, "C")
+
+        # Data de geração
+        self.set_font("Arial", "", 10)
+        gerado = datetime.now().strftime('%d/%m/%Y %H:%M')
+        self.cell(0, 6, f"Gerado em: {gerado}", 0, 1, "C")
+        self.ln(4)
+
+        # Cabeçalho da tabela
+        self._draw_table_header()
+
+    def footer(self):
+        # Rodapé com numeração
+        self.set_y(-15)
+        self.set_font("Arial", "I", 10)
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
+
+    def _draw_table_header(self):
+        # Cabeçalho das colunas com alinhamentos distintos
+        self.set_font("Arial", "B", 10)
+        self.set_text_color(*self.primary_color)
+        headers = ["Data", "Tipo", "Descrição", "Valor (R$)"]
+        aligns  = ['C',    'C',    'L',           'R']
+        for i, title in enumerate(headers):
+            self.cell(self.col_widths[i], self.line_height, title, 1, 0, aligns[i])
+        self.ln(self.line_height)
+
+    def create_receita_despesa_list(self, registros):
+        """Renderiza uma lista tabular de receitas e despesas."""
+        self.alias_nb_pages()
+        self.add_page()
+
+        # Se não houver registros
+        if not registros:
+            self.set_font("Arial", "", 12)
+            self.cell(0, 10, "Nenhum registro encontrado.", ln=True, align="C")
+            return
+
+        # Conteúdo da tabela
+        self.set_font("Arial", "", 10)
+        self.set_text_color(*self.primary_color)
+        saldo = 0.0
+
+        for reg in registros:
+            # Quebra de página automática
+            if self.get_y() > self.h - 30:
+                self.add_page()
+
+            data_str  = reg['data'].strftime('%d/%m/%Y')
+            tipo_str  = reg['tipo']
+            descricao = reg['descricao']
+            valor_dec = reg['valor']          # geralmente Decimal vindo do DB
+            valor_num = float(valor_dec)     # converte para float
+
+            # Ajuste de saldo
+            if tipo_str.lower() == 'receita':
+                saldo += valor_num
+            else:
+                saldo -= valor_num
+
+            # Células da linha
+            # Data (centralizado)
+            self.cell(self.col_widths[0], self.line_height, data_str, 1, 0, 'C')
+            # Tipo (centralizado)
+            self.cell(self.col_widths[1], self.line_height, tipo_str, 1, 0, 'C')
+            # Descrição (esquerda, truncada)
+            desc_w = self.col_widths[2]
+            text = descricao
+            if self.get_string_width(text) > desc_w:
+                while self.get_string_width(text + '...') > desc_w and len(text):
+                    text = text[:-1]
+                text += '...'
+            self.cell(desc_w, self.line_height, text, 1, 0, 'L')
+            # Valor (direita)
+            valor_str = f"{valor_num:,.2f}"
+            self.cell(self.col_widths[3], self.line_height, valor_str, 1, 0, 'R')
+
+            self.ln(self.line_height)
+
+        # Saldo final
+        self.ln(4)
+        self.set_font("Arial", "B", 12)
+        saldo_str = f"{saldo:,.2f}"
+        self.cell(0, 8, f"Saldo Final: R$ {saldo_str}", 0, 1, 'R')
+
 # Fim das Classes
 
 # Início das Rotas
 
+# Relatorio de Carros
 @app.route('/relatorio/carros', methods=['GET'])
 def criar_pdf_carro():
     marca = request.args.get('marca')
@@ -683,6 +786,7 @@ def criar_pdf_carro():
         download_name=f"Relatorio_Carros_{datetime.now().strftime('%Y%m%d')}.pdf"
     )
 
+# Relatorio de Motos
 @app.route('/relatorio/motos', methods=['GET'])
 def criar_pdf_moto():
     marca = request.args.get('marca')
@@ -734,6 +838,7 @@ def criar_pdf_moto():
         download_name=f"Relatorio_Motos_{datetime.now().strftime('%Y%m%d')}.pdf"
     )
 
+# Relatorio de Usuarios
 @app.route('/relatorio/usuarios', methods=['GET'])
 def criar_pdf_usuarios():
     # Obtendo parâmetros de filtro via query string
@@ -805,6 +910,7 @@ def criar_pdf_usuarios():
         download_name=f"Relatorio_Usuarios_{datetime.now().strftime('%Y%m%d')}.pdf"
     )
 
+# Relatorio de Manutenções
 @app.route('/relatorio/manutencao', methods=['GET'])
 def criar_pdf_manutencao():
     tipo_veic = request.args.get('tipo-veic', '').strip()
@@ -897,7 +1003,88 @@ def criar_pdf_manutencao():
     )
 
 # Relatorio de Despesas e receitas
-# Relatorio de clientes e compras
-# Relatorio de financiamentos e parcelas pagas
+@app.route('/relatorio/receita_despesa', methods=['GET'])
+def criar_pdf_receita_despesa():
+    # Parâmetros de filtro
+    tipo = request.args.get('tipo', '').strip().lower()  # 'receita' ou 'despesa'
+    dia = request.args.get('dia', '').strip()
+    mes = request.args.get('mes', '').strip()
+    ano = request.args.get('ano', '').strip()
+    origem = request.args.get('origem', '').strip()  # tabela de origem opcional
 
-# Fim das Rotas
+    # Query principal
+    query = '''
+        SELECT ID_RECEITA_DESPESA,
+               TIPO,
+               VALOR,
+               DATA_RECEITA_DESPESA,
+               DESCRICAO,
+               ID_ORIGEM,
+               TABELA_ORIGEM
+          FROM RECEITA_DESPESA
+         WHERE 1=1
+    '''
+    params = []
+
+    if tipo in ('receita', 'despesa'):
+        # supondo: 1 = receita, 2 = despesa
+        codigo = 1 if tipo == 'receita' else 2
+        query += ' AND TIPO = ?'
+        params.append(codigo)
+
+    if dia:
+        query += ' AND EXTRACT(DAY FROM DATA_RECEITA_DESPESA) = ?'
+        params.append(int(dia))
+    if mes:
+        query += ' AND EXTRACT(MONTH FROM DATA_RECEITA_DESPESA) = ?'
+        params.append(int(mes))
+    if ano:
+        query += ' AND EXTRACT(YEAR FROM DATA_RECEITA_DESPESA) = ?'
+        params.append(int(ano))
+    if origem:
+        query += ' AND TABELA_ORIGEM = ?'
+        params.append(origem)
+
+    cursor = con.cursor()
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    cursor.close()
+
+    # Estrutura para agrupar e formatar entradas
+    registros = []
+    for id_rd, tp, valor, data_rd, desc, id_origem, tabela_origem in rows:
+        registros.append({
+            'id': id_rd,
+            'tipo': 'Receita' if tp == 1 else 'Despesa',
+            'valor': valor,
+            'data': data_rd,
+            'descricao': desc,
+            'origem': f"{tabela_origem} (ID: {id_origem})"
+        })
+
+    # Gera PDF
+    pdf = CustomReceitaDespesaPDF()
+    pdf.create_receita_despesa_list(registros)
+    filename = f"relatorio_receita_despesa.pdf"
+    pdf.output(filename)
+
+    return send_file(
+        filename,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=filename
+    )
+
+#
+# # Relatorio de Clientes e Compras
+# @app.route('/relatorio/ClientesCompras', methods=['GET'])
+# def criar_pdf_clientes_compras():
+#
+#
+#
+# # Relatorio de financiamentos e parcelas pagas
+# @app.route('/relatorio/FinanciamentosParcelasPagas', methods=['GET'])
+# def criar_pdf_financiamentos_parcelas_pagas():
+#
+#
+# # Fim das Rotas

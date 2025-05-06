@@ -11,6 +11,7 @@ import qrcode
 import smtplib
 import jwt
 import requests
+import uuid
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -140,10 +141,9 @@ def gerar_pix_funcao(nome: str, valor, chave_pix: str, cidade: str):
     # Salvamento local
     pasta = os.path.join(os.getcwd(), "upload", "qrcodes")
     os.makedirs(pasta, exist_ok=True)
-    existentes = [f for f in os.listdir(pasta) if f.startswith("pix_") and f.endswith(".png")]
-    nums = [int(f.replace("pix_", "").replace(".png", "")) for f in existentes if f.replace("pix_", "").replace(".png", "").isdigit()]
-    prox = (max(nums) if nums else 0) + 1
-    nome_arquivo = f"pix_{prox}.png"
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    unique_id = uuid.uuid4().hex  # ex: '9f1c2e3a4b5d6f7e8a9b0c1d2e3f4a5b'
+    nome_arquivo = f"pix_{unique_id}_{timestamp}.png"
     caminho = os.path.join(pasta, nome_arquivo)
     img.save(caminho)
 
@@ -162,7 +162,7 @@ def gerar_pix_funcao(nome: str, valor, chave_pix: str, cidade: str):
         raise ConnectionError(f"Erro no upload Imgur: {resp.status_code}")
     link = resp.json().get('data', {}).get('link')
 
-    return payload_completo, link
+    return payload_completo, link, nome_arquivo
 
 
 def enviar_email_qrcode(to: str, subject: str, template: str, context: dict):
@@ -257,7 +257,7 @@ def gerar_pix():
             return jsonify({"erro": "Chave pix não encontrada"}), 404
 
         nome, chave_pix, cidade = resultado
-        payload, link = gerar_pix_funcao(nome, valor, chave_pix, cidade)
+        payload, link, nome_arquivo = gerar_pix_funcao(nome, valor, chave_pix, cidade)
 
         cursor = con.cursor()
         cursor.execute("SELECT nome_completo, email, cpf_cnpj, telefone FROM usuario WHERE email = ?", (email,))
@@ -291,9 +291,8 @@ def gerar_pix():
 
         enviar_email_qrcode(email, "NetCars - Confirmação de Pagamento",'email_pix.html',context )
 
-        caminho = os.path.join(os.getcwd(), "upload", "qrcodes",
-                               os.listdir(os.path.join(os.getcwd(), "upload", "qrcodes"))[-1])
-        return send_file(caminho, mimetype='image/png', as_attachment=True, download_name=os.path.basename(caminho))
+        caminho = os.path.join(os.getcwd(), "upload", "qrcodes", nome_arquivo)
+        return send_file(caminho, mimetype='image/png', as_attachment=True, download_name=nome_arquivo)
 
     except Exception as e:
         return jsonify({"erro": f"Ocorreu um erro interno: {str(e)}"}), 500
