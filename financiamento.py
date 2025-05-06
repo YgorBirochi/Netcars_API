@@ -352,7 +352,6 @@ def gerar_qrcode_parcela_amortizar():
     try:
         payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
         id_usuario = payload['id_usuario']
-        email = payload['email']
     except jwt.ExpiredSignatureError:
         return jsonify({'error': 'Token expirado'}), 401
     except jwt.InvalidTokenError:
@@ -389,45 +388,12 @@ def gerar_qrcode_parcela_amortizar():
 
     cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
     resultado = cursor.fetchone()
-    cursor.close()
 
     if not resultado:
         return jsonify({"erro": "Chave pix não encontrada"}), 404
 
     nome, chave_pix, cidade = resultado
-    payload, link = gerar_pix_funcao(nome, valor_parcela_amortizada, chave_pix, cidade)
-
-    cursor = con.cursor()
-    cursor.execute("SELECT nome_completo, email, cpf_cnpj, telefone FROM usuario WHERE email = ?", (email,))
-    usuario = cursor.fetchone()
-    cursor.close()
-
-    if not usuario:
-        return jsonify({"erro": "Usuário não encontrado"}), 404
-
-    nome_usuario, email_usuario, cpf_usuario, telefone_usuario = usuario
-    data_envio = datetime.now()
-    data_limite = data_envio + timedelta(days=1)
-    data_limite_str = data_limite.strftime("%d/%m/%Y")
-
-    context = {
-        'nome_usuario': nome_usuario,
-        'email_destinatario': email_usuario,
-        'dados_user': {
-            'nome': nome_usuario,
-            'email': email_usuario,
-            'cpf': cpf_usuario,
-            'telefone': telefone_usuario,
-            'qrcode_url': link,
-            'valor': f"{valor_parcela_amortizada:.2f}"
-        },
-        'payload_completo': payload,
-        'data_limite_str': data_limite_str,
-        'endereco_concessionaria': "Av. Exemplo, 1234 - Centro, Cidade Fictícia",
-        'ano': datetime.now().year
-    }
-
-    enviar_email_qrcode(email, "NetCars - Parcelamento", 'email_pix.html', context)
+    gerar_pix_funcao(nome, valor_parcela_amortizada, chave_pix, cidade)
 
     caminho = os.path.join(os.getcwd(), "upload", "qrcodes",
                            os.listdir(os.path.join(os.getcwd(), "upload", "qrcodes"))[-1])
