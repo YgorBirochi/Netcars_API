@@ -822,8 +822,6 @@ def criar_pdf_manutencao():
                m.VALOR_TOTAL,
                ms.QUANTIDADE U,
                ms.VALOR_TOTAL_ITEM,
-               ms.QUANTIDADE,
-               ms.VALOR_TOTAL_ITEM,
                s.DESCRICAO,
                s.VALOR
           FROM MANUTENCAO m
@@ -856,7 +854,7 @@ def criar_pdf_manutencao():
 
     # Agrupa manutenções, serviços e busca detalhes do veículo
     temp = {}
-    for id_m, id_v, tp, dt, obs, val, desc, serv_val in rows:
+    for id_m, id_v, tp, dt, obs, val, quantidade, valor_item, desc, valor in rows:
         if id_m not in temp:
             # busca dados do veículo
             vc = con.cursor()
