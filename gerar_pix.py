@@ -1,13 +1,10 @@
-from flask import Flask, send_file, jsonify, request, current_app, render_template
-from qrcode.constants import ERROR_CORRECT_H
+from flask import Flask, send_file, jsonify, request, render_template
 from main import app, con, senha_app_email, senha_secreta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from threading import Thread
 from datetime import datetime, timedelta
 from flask_apscheduler import APScheduler
-from PIL import Image
-from io import BytesIO
 import os
 import crcmod
 import qrcode
@@ -23,6 +20,7 @@ scheduler = APScheduler()
 scheduler.init_app(app)
 
 def Buscar_Usuario_Devedor():
+    print('foi')
     with app.app_context():
         cur = con.cursor()
 
@@ -290,8 +288,6 @@ def gerar_pix():
             'endereco_concessionaria': "Av. Exemplo, 1234 - Centro, Cidade Fictícia",
             'ano': datetime.now().year
         }
-
-        corpo_email = render_template('email_pix.html', **context)
 
         enviar_email_qrcode(email, "NetCars - Confirmação de Pagamento",'email_pix.html',context )
 
