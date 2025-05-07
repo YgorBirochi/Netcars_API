@@ -785,8 +785,9 @@ def post_servico():
     finally:
         cursor.close()
 
-@app.route('/servicos', methods=['PUT'])
-def put_servico():
+
+@app.route('/servicos/<int:id_servicos>', methods=['PUT'])
+def put_servico(id_servicos):
     token = request.headers.get('Authorization')
     if not token:
         return jsonify({'error': 'Token de autenticação necessário'}), 401
@@ -800,44 +801,60 @@ def put_servico():
     except jwt.InvalidTokenError:
         return jsonify({'error': 'Token inválido'}), 401
 
-    cursor = con.cursor()
-    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
-    user_type = cursor.fetchone()[0]
-    if user_type not in [1, 2]:
-        return jsonify({'error': 'Acesso restrito a administradores'}), 403
-
-    data = request.get_json()
-    id_servicos = data.get('id_servicos')
-    descricao = data.get('descricao')
-    valor = data.get('valor')
-
-    if not id_servicos or not descricao or valor is None:
-        return jsonify({'error': 'Dados incompletos.'}), 400
-
+    cursor = None  # Inicializa como None para tratamento seguro
     try:
+        cursor = con.cursor()
+
+        # Verifica permissão do usuário
+        cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+        user_type = cursor.fetchone()[0]
+        if user_type not in [1, 2]:
+            return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+        # Obtém dados do JSON
+        data = request.get_json()
+        descricao = data.get('descricao')
+        valor = data.get('valor')
+
+        # Validação dos campos
+        if not descricao or valor is None:
+            return jsonify({'error': 'Dados incompletos.'}), 400
+
+        # Verifica existência do serviço
         cursor.execute('SELECT 1 FROM SERVICOS WHERE id_servicos = ?', (id_servicos,))
-        if cursor.fetchone() is None:
+        if not cursor.fetchone():
             return jsonify({'error': 'Serviço não encontrado.'}), 404
 
+        # Atualiza o serviço
         cursor.execute('''
-            UPDATE SERVICOS SET DESCRICAO = ?, VALOR = ?
+            UPDATE SERVICOS 
+            SET DESCRICAO = ?, VALOR = ?
             WHERE id_servicos = ?
         ''', (descricao, valor, id_servicos))
 
-        cursor.execute('SELECT ID_MANUTENCAO FROM MANUTENCAO_SERVICOS WHERE ID_SERVICOS = ?', (id_servicos,))
+        # Verifica se há manutenção associada (evita None[0])
+        cursor.execute('''
+            SELECT ID_MANUTENCAO 
+            FROM MANUTENCAO_SERVICOS 
+            WHERE ID_SERVICOS = ?
+        ''', (id_servicos,))
+        resultado = cursor.fetchone()
 
-        id_manutencao = cursor.fetchone()[0]
-
-        # Atualizar o valor total
-        atualizar_valor_total(id_manutencao)
+        if resultado:  # Só atualiza se existir relacionamento
+            id_manutencao = resultado[0]
+            atualizar_valor_total(id_manutencao)
 
         con.commit()
-
         return jsonify({'success': 'Serviço atualizado com sucesso.'}), 200
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        con.rollback()  # Reverte em caso de erro
+        return jsonify({'error': str(e)}), 500  # Erro genérico do servidor
+
     finally:
-        cursor.close()
+        if cursor:  # Fecha cursor apenas se existir
+            cursor.close()
+
 
 @app.route('/servicos/<int:id>', methods=['DELETE'])
 def delete_servico(id):
@@ -854,30 +871,47 @@ def delete_servico(id):
     except jwt.InvalidTokenError:
         return jsonify({'error': 'Token inválido'}), 401
 
-    cursor = con.cursor()
-    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
-    user_type = cursor.fetchone()[0]
-    if user_type not in [1, 2]:
-        return jsonify({'error': 'Acesso restrito a administradores'}), 403
-
+    cursor = None  # Inicialize como None para tratamento seguro
     try:
+        cursor = con.cursor()
+
+        # Verifica permissão do usuário
+        cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+        user_type = cursor.fetchone()[0]
+        if user_type not in [1, 2]:
+            return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+        # Verifica existência do serviço
         cursor.execute('SELECT 1 FROM SERVICOS WHERE id_servicos = ?', (id,))
-        if cursor.fetchone() is None:
+        if not cursor.fetchone():
             return jsonify({'error': 'Serviço não encontrado'}), 404
 
-        cursor.execute('UPDATE SERVICOS SET ATIVO = FALSE WHERE id_servicos = ?', (id,))
+        # Inativa o serviço (não exclui)
+        cursor.execute('''
+            UPDATE SERVICOS 
+            SET ATIVO = FALSE 
+            WHERE id_servicos = ?
+        ''', (id,))
 
-        cursor.execute('SELECT ID_MANUTENCAO FROM MANUTENCAO_SERVICOS WHERE ID_SERVICOS = ?', (id,))
+        # Verifica se há manutenção associada
+        cursor.execute('''
+            SELECT ID_MANUTENCAO 
+            FROM MANUTENCAO_SERVICOS 
+            WHERE ID_SERVICOS = ?
+        ''', (id,))
+        resultado = cursor.fetchone()
 
-        # Obtém o id da manutenção
-        id_manutencao = cursor.fetchone()[0]
-
-        # Atualiza o valor total
-        atualizar_valor_total(id_manutencao)
+        if resultado:  # Atualiza valor total apenas se houver manutenção
+            id_manutencao = resultado[0]
+            atualizar_valor_total(id_manutencao)
 
         con.commit()
-        return jsonify({'success': 'Serviço excluído com sucesso.'}), 200
+        return jsonify({'success': 'Serviço inativado com sucesso.'}), 200
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        con.rollback()
+        return jsonify({'error': str(e)}), 500  # Erro genérico do servidor
+
     finally:
-        cursor.close()
+        if cursor:  # Fecha o cursor apenas se existir
+            cursor.close()
