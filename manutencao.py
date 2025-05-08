@@ -322,14 +322,8 @@ def delete_manutencao(id):
         if cursor.fetchone() is None:
             return jsonify({'error': 'Manutenção não encontrada'}), 404
 
+        # Inativa a manutenção
         cursor.execute('UPDATE MANUTENCAO SET ATIVO = FALSE WHERE ID_MANUTENCAO = ?', (id,))
-
-        cursor.execute('SELECT ID_SERVICOS FROM MANUTENCAO_SERVICOS WHERE ID_MANUTENCAO = ?', (id,))
-        ids_servicos = [row[0] for row in cursor.fetchall()]
-
-        if ids_servicos:
-            for id_servico in ids_servicos:
-                cursor.execute('UPDATE SERVICOS SET ATIVO = FALSE WHERE ID_SERVICOS = ?', (id_servico, ))
 
         con.commit()
         return jsonify({'success': 'Manutenção excluída com sucesso.'}), 200
@@ -393,37 +387,41 @@ def get_manutencao_servicos(id):
         return jsonify({'error': 'Acesso restrito a administradores'}), 403
 
     try:
+        # Verificar existência da manutenção
         cursor.execute('SELECT 1 FROM MANUTENCAO WHERE ID_MANUTENCAO = ?', (id,))
-        resposta = cursor.fetchone()
-        if not resposta:
+        if not cursor.fetchone():
             return jsonify({'error': 'Manutenção não encontrada.'}), 400
 
-        cursor.execute('SELECT ID_SERVICOS FROM MANUTENCAO_SERVICOS WHERE ID_MANUTENCAO = ?', (id,))
-        resposta = cursor.fetchall()
-        if not resposta or len(resposta) < 0:
-            return jsonify({'servicos': []}), 200
+        # Buscar serviços com JOIN e ordenação
+        cursor.execute('''
+                SELECT 
+                    MS.ID_SERVICOS, 
+                    MS.QUANTIDADE,
+                    MS.VALOR_TOTAL_ITEM,
+                    S.DESCRICAO,
+                    S.VALOR
+                FROM MANUTENCAO_SERVICOS MS
+                JOIN SERVICOS S ON MS.ID_SERVICOS = S.ID_SERVICOS
+                WHERE MS.ID_MANUTENCAO = ?
+                ORDER BY MS.ID_SERVICOS  -- Garante ordem consistente
+            ''', (id,))
 
-        ids_servicos = [row[0] for row in resposta]
+        servicos = [
+            {
+                "id_servicos": row[0],
+                "quantidade": row[1],
+                "valor_total_item": row[2],
+                "descricao": row[3],
+                "valor_unitario": row[4]
+            }
+            for row in cursor.fetchall()
+        ]
 
-        servicos = []
-        for id_serv in ids_servicos:
-            cursor.execute('SELECT ID_SERVICOS, DESCRICAO, VALOR FROM SERVICOS WHERE id_servicos = ? AND ATIVO IS TRUE', (id_serv,))
-            servico = cursor.fetchone()
-            if servico:
-                servicos.append({
-                    "id_servicos": servico[0],
-                    "descricao": servico[1],
-                    "valor": servico[2]
-                })
-
-        return jsonify({
-            'servicos': servicos
-        }), 200
+        return jsonify({'servicos': servicos}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 400
     finally:
         cursor.close()
-
 
 @app.route('/manutencao_servicos', methods=['POST'])
 def add_manutencao_servico():
@@ -583,71 +581,182 @@ def update_manutencao_servico(id_manutencao):
     if not id_servico or not quantidade:
         return jsonify({'error': 'Dados incompletos. ID do serviço e quantidade são obrigatórios'}), 400
 
+    data = request.get_json()
+    id_servico = data.get('id_servico')
+    quantidade = data.get('quantidade')
+
+    # Validação de tipo da quantidade
     try:
-        # Verificar se a associação existe
-        cursor.execute('''
-            SELECT 1 FROM MANUTENCAO_SERVICOS 
-            WHERE ID_MANUTENCAO = ? AND ID_SERVICOS = ?
-        ''', (id_manutencao, id_servico))
+        quantidade = int(quantidade)  # Força conversão para inteiro
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Quantidade deve ser um número inteiro'}), 400
 
-        if not cursor.fetchone():
-            return jsonify({'error': 'Associação não encontrada'}), 404
-
-        # Obter o valor unitário do serviço
-        cursor.execute('SELECT VALOR FROM SERVICOS WHERE ID_SERVICOS = ? AND ATIVO IS TRUE', (id_servico,))
+    try:
+        # Buscar valor unitário como Decimal
+        cursor.execute('SELECT VALOR FROM SERVICOS WHERE ID_SERVICOS = ?', (id_servico,))
         servico = cursor.fetchone()
         if not servico:
-            return jsonify({'error': 'Serviço não encontrado ou inativo'}), 404
+            return jsonify({'error': 'Serviço não encontrado'}), 404
 
-        valor_unitario = servico[0]
+        valor_unitario = float(servico[0])  # Converte Decimal para float
         valor_total_item = valor_unitario * quantidade
 
-        # Atualizar a quantidade e o valor total do item
+        # Atualizar no banco
         cursor.execute('''
-            UPDATE MANUTENCAO_SERVICOS 
-            SET QUANTIDADE = ?, VALOR_TOTAL_ITEM = ?
-            WHERE ID_MANUTENCAO = ? AND ID_SERVICOS = ?
-        ''', (quantidade, valor_total_item, id_manutencao, id_servico))
+                UPDATE MANUTENCAO_SERVICOS 
+                SET QUANTIDADE = ?, VALOR_TOTAL_ITEM = ?
+                WHERE ID_MANUTENCAO = ? AND ID_SERVICOS = ?
+            ''', (quantidade, valor_total_item, id_manutencao, id_servico))
 
-        # Atualizar o valor total da manutenção
         atualizar_valor_total(id_manutencao)
-
         con.commit()
 
-        return jsonify({
-            'success': 'Serviço da manutenção atualizado com sucesso'
-        }), 200
+        return jsonify({'success': 'Serviço atualizado!'}), 200
 
     except Exception as e:
         con.rollback()
-        return jsonify({'error': f'Erro ao atualizar serviço da manutenção: {str(e)}'}), 500
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
     finally:
         cursor.close()
 
 
-# Modificar a função para atualizar o valor total considerando quantidades
-def atualizar_valor_total(id_manutencao):
-    cursor = con.cursor()
-
+@app.route('/manutencao_servicos/<int:id_manutencao>/<int:id_servico>', methods=['GET'])
+def get_servico_manutencao(id_manutencao, id_servico):
     try:
+        cursor = con.cursor()
         cursor.execute('''
-            SELECT S.ID_SERVICOS, S.VALOR, MS.QUANTIDADE
+            SELECT 
+                MS.ID_SERVICOS,
+                MS.QUANTIDADE,
+                MS.VALOR_TOTAL_ITEM,
+                S.DESCRICAO,
+                S.VALOR
             FROM MANUTENCAO_SERVICOS MS
             JOIN SERVICOS S ON MS.ID_SERVICOS = S.ID_SERVICOS
-            WHERE MS.ID_MANUTENCAO = ? AND S.ATIVO IS TRUE
+            WHERE MS.ID_MANUTENCAO = ? AND MS.ID_SERVICOS = ?
+        ''', (id_manutencao, id_servico))
+
+        servico = cursor.fetchone()
+
+        if not servico:
+            return jsonify({'error': 'Serviço não encontrado na manutenção'}), 404
+
+        return jsonify({
+            'id_servicos': servico[0],
+            'quantidade': servico[1],
+            'valor_total_item': float(servico[2]),
+            'descricao': servico[3],
+            'valor_unitario': float(servico[4])
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cursor.close()
+
+
+@app.route('/manutencao_servicos/<int:id_manutencao>/<int:id_servico>', methods=['PUT'])
+def update_manutencao_servico_v2(id_manutencao, id_servico):
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type not in [1, 2]:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    data = request.get_json()
+    novo_id_servico = data.get('novo_id_servico')
+    quantidade = data.get('quantidade')
+
+    # Validações básicas
+    if novo_id_servico is None or quantidade is None:
+        return jsonify({'error': 'Dados incompletos'}), 400
+
+    try:
+        # Converter para inteiros
+        novo_id_servico = int(novo_id_servico)
+        quantidade = int(quantidade)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'IDs e quantidade devem ser números inteiros'}), 400
+
+    if quantidade <= 0:
+        return jsonify({'error': 'Quantidade inválida'}), 400
+
+    try:
+        # Verificar existência do novo serviço
+        cursor.execute('SELECT VALOR FROM SERVICOS WHERE ID_SERVICOS = ?', (novo_id_servico,))
+        servico = cursor.fetchone()
+        if not servico:
+            return jsonify({'error': 'Novo serviço não encontrado'}), 404
+
+        valor_unitario = servico[0]
+        valor_total_item = valor_unitario * quantidade
+
+        # Verificar duplicatas apenas se for um serviço diferente
+        if novo_id_servico != id_servico:
+            # Modificado: Ignora o registro atual na verificação
+            cursor.execute('''
+                    SELECT 1 FROM MANUTENCAO_SERVICOS 
+                    WHERE ID_MANUTENCAO = ? 
+                    AND ID_SERVICOS = ? 
+                    AND ID_SERVICOS != ?  -- Exclui o registro atual da verificação
+                ''', (id_manutencao, novo_id_servico, id_servico))  # Usar id_servico original
+
+            if cursor.fetchone():
+                return jsonify({'error': 'Este serviço já está na manutenção'}), 400
+
+        # Atualizar registro (mesmo código)
+        cursor.execute('''
+                UPDATE MANUTENCAO_SERVICOS 
+                SET ID_SERVICOS = ?, 
+                    QUANTIDADE = ?, 
+                    VALOR_TOTAL_ITEM = ?
+                WHERE ID_MANUTENCAO = ? 
+                AND ID_SERVICOS = ?
+            ''', (novo_id_servico, quantidade, valor_total_item, id_manutencao, id_servico))
+
+        atualizar_valor_total(id_manutencao)
+        con.commit()
+
+        return jsonify({'success': 'Serviço atualizado com sucesso!'}), 200
+
+    except Exception as e:
+        con.rollback()
+        print(f"Erro interno: {str(e)}")
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+    finally:
+        cursor.close()
+
+
+def atualizar_valor_total(id_manutencao):
+    cursor = con.cursor()
+    try:
+        # Soma correta dos VALOR_TOTAL_ITEM
+        cursor.execute('''
+            SELECT COALESCE(SUM(VALOR_TOTAL_ITEM), 0) 
+            FROM MANUTENCAO_SERVICOS 
+            WHERE ID_MANUTENCAO = ?
         ''', (id_manutencao,))
 
-        servicos = cursor.fetchall()
-        valor_total = 0
-
-        for servico in servicos:
-            id_servico, valor_unitario, quantidade = servico
-            valor_total += valor_unitario * quantidade
+        total = cursor.fetchone()[0]
 
         cursor.execute('''
-            UPDATE MANUTENCAO SET VALOR_TOTAL = ?
+            UPDATE MANUTENCAO 
+            SET VALOR_TOTAL = ?
             WHERE ID_MANUTENCAO = ?
-        ''', (valor_total, id_manutencao))
+        ''', (float(total), id_manutencao))
 
         con.commit()
     except Exception as e:
