@@ -276,8 +276,8 @@ def buscar_financiamento():
             "dados_veiculo": json_veiculo
         })
 
-@app.route('/gerar_qrcode_parcela/recente', methods=['GET'])
-def gerar_qrcode_parcela_atual():
+@app.route('/gerar_qrcode_parcela/<tipo>', methods=['GET'])
+def gerar_qrcode_parcela_atual(tipo):
     token = request.headers.get('Authorization')
     if not token:
         return jsonify({'error': 'Token de autenticação necessário'}), 401
@@ -302,15 +302,30 @@ def gerar_qrcode_parcela_atual():
 
     id_financiamento = result_financ[0]
 
-    cursor.execute('''
-        SELECT FIRST 1
-           ID_FINANCIAMENTO_PARCELA,
-           VALOR_PARCELA
-        FROM FINANCIAMENTO_PARCELA
-        WHERE ID_FINANCIAMENTO = ?
-        AND STATUS NOT IN (3, 4)
-        ORDER BY DATA_VENCIMENTO ASC;
-    ''', (id_financiamento,))
+    if tipo == 'recente':
+        cursor.execute('''
+            SELECT FIRST 1
+               ID_FINANCIAMENTO_PARCELA,
+               VALOR_PARCELA,
+               DATA_VENCIMENTO
+            FROM FINANCIAMENTO_PARCELA
+            WHERE ID_FINANCIAMENTO = ?
+            AND STATUS NOT IN (3, 4)
+            ORDER BY DATA_VENCIMENTO ASC;
+        ''', (id_financiamento,))
+    elif tipo == 'amortizar':
+        cursor.execute('''
+                SELECT FIRST 1
+                   ID_FINANCIAMENTO_PARCELA,
+                   VALOR_PARCELA_AMORTIZADA,
+                   DATA_VENCIMENTO
+                FROM FINANCIAMENTO_PARCELA
+                WHERE ID_FINANCIAMENTO = ?
+                AND STATUS NOT IN (3, 4)
+                ORDER BY DATA_VENCIMENTO DESC;
+            ''', (id_financiamento,))
+    else:
+        return jsonify({'error': 'Parâmetro inválido.'}), 400
 
     result_parc = cursor.fetchone()
 
@@ -319,6 +334,26 @@ def gerar_qrcode_parcela_atual():
 
     id_parcela = int(result_parc[0])
     valor_parcela = float(result_parc[1])
+    data_vencimento = result_parc[2]
+
+    data_atual = datetime.now()
+
+    # Aplica juros de 1% ao dia em caso de atraso
+    if isinstance(data_vencimento, str):
+        data_vencimento = datetime.strptime(data_vencimento, "%Y-%m-%d")  # ajuste o formato se necessário
+
+    juros = 0
+    if data_atual > data_vencimento:
+        dias_atraso = (data_atual - data_vencimento).days
+
+        # Calcula o valor da parcela com juros
+        valor_parcela_juros = valor_parcela * (1 + JUROS) ** dias_atraso
+
+        # Obtém os juros
+        juros = valor_parcela_juros - valor_parcela
+
+        # Substitui o valor da parcela
+        valor_parcela = valor_parcela_juros
 
     cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
     resultado = cursor.fetchone()
@@ -339,72 +374,11 @@ def gerar_qrcode_parcela_atual():
         download_name=nome_arquivo
     ))
     response.headers['ID-PARCELA'] = str(id_parcela)
-    response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA'
-    return response
+    response.headers['VALOR-PARCELA'] = str(valor_parcela)
+    response.headers['JUROS'] = str(juros)
 
-@app.route('/gerar_qrcode_parcela/amortizar', methods=['GET'])
-def gerar_qrcode_parcela_amortizar():
-    token = request.headers.get('Authorization')
-    if not token:
-        return jsonify({'error': 'Token de autenticação necessário'}), 401
+    response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA, VALOR-PARCELA, JUROS'
 
-    token = remover_bearer(token)
-    try:
-        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
-        id_usuario = payload['id_usuario']
-    except jwt.ExpiredSignatureError:
-        return jsonify({'error': 'Token expirado'}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({'error': 'Token inválido'}), 401
-
-    cursor = con.cursor()
-
-    cursor.execute('SELECT ID_FINANCIAMENTO FROM FINANCIAMENTO WHERE ID_USUARIO = ?', (id_usuario,))
-
-    result_financ = cursor.fetchone()
-
-    if not result_financ:
-        return jsonify({'error': 'Nenhum financiamento encontrado.'}), 400
-
-    id_financiamento = result_financ[0]
-
-    cursor.execute('''
-        SELECT FIRST 1
-           ID_FINANCIAMENTO_PARCELA,
-           VALOR_PARCELA_AMORTIZADA
-        FROM FINANCIAMENTO_PARCELA
-        WHERE ID_FINANCIAMENTO = ?
-        AND STATUS NOT IN (3, 4)
-        ORDER BY DATA_VENCIMENTO DESC;
-    ''', (id_financiamento,))
-
-    result_parc = cursor.fetchone()
-
-    if not result_parc:
-        return jsonify({'error': 'Nenhuma parcela encontrada'})
-
-    id_parcela = int(result_parc[0])
-    valor_parcela_amortizada = float(result_parc[1])
-
-    cursor.execute("SELECT cg.RAZAO_SOCIAL, cg.CHAVE_PIX, cg.CIDADE FROM CONFIG_GARAGEM cg")
-    resultado = cursor.fetchone()
-
-    if not resultado:
-        return jsonify({"erro": "Chave pix não encontrada"}), 404
-
-    nome, chave_pix, cidade = resultado
-    payload, link, nome_arquivo = gerar_pix_funcao(nome, valor_parcela_amortizada, chave_pix, cidade)
-
-    caminho = os.path.join(os.getcwd(), "upload", "qrcodes", nome_arquivo)
-
-    response = make_response(send_file(
-        caminho,
-        mimetype='image/png',
-        as_attachment=True,
-        download_name=nome_arquivo
-    ))
-    response.headers['ID-PARCELA'] = str(id_parcela)
-    response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA'
     return response
 
 @app.route('/pagar_parcela/<int:id_parcela>/<int:amortizada>', methods = ['GET'])
@@ -414,10 +388,33 @@ def pagar_parcela(id_parcela, amortizada):
 
     cursor = con.cursor()
 
-    cursor.execute('SELECT 1 FROM FINANCIAMENTO_PARCELA WHERE ID_FINANCIAMENTO_PARCELA = ?', (id_parcela,))
+    cursor.execute('SELECT VALOR_PARCELA, DATA_VENCIMENTO FROM FINANCIAMENTO_PARCELA WHERE ID_FINANCIAMENTO_PARCELA = ?', (id_parcela,))
 
-    if not cursor.fetchone():
+    result_parc = cursor.fetchone()
+
+    if not result_parc:
         return jsonify({'error': 'Parcela não encontrada.'}), 400
+
+    valor_parcela = float(result_parc[0])
+    data_vencimento = result_parc[1]
+
+    data_atual = datetime.now()
+
+    # Aplica juros de 1% ao dia em caso de atraso
+    if isinstance(data_vencimento, str):
+        data_vencimento = datetime.strptime(data_vencimento, "%Y-%m-%d")  # ajuste o formato se necessário
+
+    if data_atual > data_vencimento:
+        dias_atraso = (data_atual - data_vencimento).days
+
+        # Calcula o valor da parcela com juros
+        valor_parcela = valor_parcela * (1 + JUROS) ** dias_atraso
+
+        cursor.execute('''
+                        UPDATE FINANCIAMENTO_PARCELA
+                        SET VALOR_PARCELA = ?
+                        WHERE ID_FINANCIAMENTO_PARCELA = ?
+                    ''', (valor_parcela, id_parcela,))
 
     try:
         if amortizada == 0:
