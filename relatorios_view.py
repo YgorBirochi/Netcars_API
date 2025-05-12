@@ -503,142 +503,105 @@ class CustomManutencaoPDF(FPDF):
         # cores
         self.primary_color = (56, 56, 56)
         self.accent_color = (220, 50, 50)
-        # layout 2 colunas × 2 linhas
-        self.card_margin_x = 10
-        self.card_margin_y = 40
-        self.card_spacing_x = 8
-        self.card_spacing_y = 8
-        self.cols = 2
-        self.rows = 2
-        usable_w = self.w - 2*self.card_margin_x - (self.cols-1)*self.card_spacing_x
-        self.card_w = usable_w/self.cols
-        self.card_h = 100
-        # fontes
-        self.line_h = 6
+        # fontes e altura de linha
         self.font_norm = 11
         self.font_bold = 12
+        self.line_h = 6
 
     def header(self):
-        self.set_font("Arial","B",14)
+        # Título centralizado
+        self.set_font("Arial", "B", 14)
         self.set_text_color(*self.primary_color)
-        self.cell(0,10,"Relatório de Manutenções",0,1,'C')
-        self.set_font("Arial","",10)
-        self.cell(0,6,f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}",0,1,'C')
-        self.ln(2)
+        self.cell(0, 10, "Relatório de Manutenção", ln=1, align='C')
+        # Linha divisória
         self.set_line_width(0.5)
         self.set_draw_color(*self.primary_color)
-        self.line(self.card_margin_x,30,self.w-self.card_margin_x,30)
+        self.line(10, self.get_y(), self.w - 10, self.get_y())
+        self.ln(4)
 
     def footer(self):
         self.set_y(-15)
-        self.set_font("Arial","I",8)
+        self.set_font("Arial", "I", 8)
         self.set_text_color(150,150,150)
-        self.cell(0,10,f"Página {self.page_no()}/{{nb}}",0,0,'C')
+        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", align='C')
 
-    def create_manutencao_cards(self, manutencoes):
+    def create_manutencao_report(self, manutencoes):
         self.alias_nb_pages()
-        total = len(manutencoes)
-
-        # Se não houver manutenções, exibe mensagem
-        if total == 0:
+        for m in manutencoes:
             self.add_page()
-            self.ln(10)
-            self.set_font("Arial", "", 12)
-            self.cell(0, 10, "Nenhuma manutenção encontrada para os critérios informados.", ln=True, align="C")
+            self._draw_header_box(m)
             self.ln(8)
-            self.set_font("Arial", "B", 14)
-            self.cell(0, 10, f"Total de manutenções: {total}", ln=True, align="C")
-            return
+            self._draw_services_table(m['servicos'])
 
-        per_page = self.cols * self.rows
-        for i, m in enumerate(manutencoes):
-            if i % per_page == 0:
-                self.add_page()
-            col = i % self.cols
-            row = (i % per_page) // self.cols
-            x = self.card_margin_x + col * (self.card_w + self.card_spacing_x)
-            y = self.card_margin_y + row * (self.card_h + self.card_spacing_y)
-            self._draw_card(m, x, y)
+    def _draw_header_box(self, m):
+        # Desenha retângulo geral de header
+        self.set_draw_color(*self.primary_color)
+        x0, y0 = self.get_x(), self.get_y()
+        total_w = self.w - 20
+        total_h = 30
+        self.rect(x0, y0, total_w, total_h)
+        # Define largura das colunas internas
+        col_w = total_w / 4
+        # Texto dentro do header
+        self.set_font("Arial", "B", self.font_bold)
+        self.set_xy(x0 + 2, y0 + 2)
+        self.cell(col_w, self.line_h, "Veículo:", border=0)
+        self.set_font("Arial", "", self.font_norm)
+        self.cell(col_w, self.line_h, f"{m['marca']} {m['modelo']}", border=0)
+        self.set_font("Arial", "B", self.font_bold)
+        self.cell(col_w, self.line_h, "Data:", border=0)
+        self.set_font("Arial", "", self.font_norm)
+        self.cell(col_w, self.line_h, datetime.strptime(str(m['data_manutencao']), '%Y-%m-%d').strftime('%d/%m/%Y'), border=0, ln=1)
+        # Segunda linha
+        self.set_font("Arial", "B", self.font_bold)
+        self.set_x(x0 + 2)
+        self.cell(col_w, self.line_h, "Placa:", border=0)
+        self.set_font("Arial", "", self.font_norm)
+        self.cell(col_w, self.line_h, m['placa'], border=0)
+        self.set_font("Arial", "B", self.font_bold)
+        self.cell(col_w, self.line_h, "Valor Total:", border=0)
+        self.set_font("Arial", "", self.font_norm)
+        self.cell(col_w, self.line_h, f"R$ {m['valor_total']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'), border=0)
+        # Observação terceira linha
+        self.set_xy(x0 + 2, y0 + 2 + self.line_h * 2)
+        self.set_font("Arial", "B", self.font_bold)
+        self.cell(0, self.line_h, "Observação:", border=0)
+        self.ln(self.line_h)
 
-        # total ao final
-        self.set_xy(self.card_margin_x, self.h - 20)
-        self.set_font("Arial", "B", 12)
-        self.cell(0, 10, f"Total de manutenções: {total}", 0, 0, 'C')
+        self.set_font("Arial", "", self.font_norm)
+        self.set_x(x0 + 2)  # alinhamento horizontal
+        self.multi_cell(total_w - 4, self.line_h, m['observacao'] or '-')
 
-    def _draw_card(self, m, x, y):
-        # retângulo de fundo; altura dinâmica baseada em serviços e observação
-        base_h = self.card_h
-        self.set_fill_color(240, 240, 240)
-        self.rect(x, y, self.card_w, base_h, 'F')
-        cx, cy = x+4, y+6
-
-        # Tipo e detalhes do veículo
-        tp = 'Carro' if m['tipo_veiculo']==1 else 'Moto'
-        self.set_xy(cx, cy)
-        self.set_font("Arial","B",self.font_bold)
+    def _draw_services_table(self, servicos):
+        # Cabeçalho da tabela
+        self.set_font("Arial", "B", self.font_bold)
+        self.set_fill_color(*self.accent_color)
+        # Colunas: descrição (60%), unitário (13%), quantidade (13%), total (14%)
+        tbl_w = self.w - 20
+        w_desc = tbl_w * 0.6
+        w_unit = tbl_w * 0.13
+        w_qtd = tbl_w * 0.13
+        w_total = tbl_w * 0.14
+        y_start = self.get_y()
+        self.set_text_color(255,255,255)
+        self.cell(w_desc, self.line_h, "Descrição", border=1, fill=True)
+        self.cell(w_unit, self.line_h, "Vr Unit.", border=1, fill=True)
+        self.cell(w_qtd, self.line_h, "Qtd.", border=1, fill=True)
+        self.cell(w_total, self.line_h, "Total", border=1, fill=True, ln=1)
+        # Linhas de serviços
+        self.set_font("Arial", "", self.font_norm)
         self.set_text_color(*self.primary_color)
-        self.cell(0,self.line_h, f"{tp}:",0,1)
-        self.set_font("Arial","",self.font_norm)
-        details = [
-            f"Marca/Modelo: {format_none(m['marca'])} {format_none(m['modelo'])}",
-            f"Ano Fab.: {format_date(m['ano_fabricacao'])}",
-            f"Ano Mod.: {format_date(m['ano_modelo'])}",
-            f"Placa: {format_none(m['placa'])}"
-        ]
-        for line in details:
-            cy += self.line_h + 1
-            self.set_xy(cx, cy)
-            self.cell(0, self.line_h, line, 0, 1)
+        for srv in servicos:
+            self.cell(w_desc, self.line_h, srv['descricao'], border=1)
+            self.cell(w_unit, self.line_h, f"R$ {srv['valor_unitario']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'), border=1)
+            self.cell(w_qtd, self.line_h, str(srv['quantidade']), border=1)
+            self.cell(w_total, self.line_h, f"R$ {srv['total_item']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'), border=1, ln=1)
+        # Linha de total geral
+        self.set_font("Arial", "B", self.font_bold)
+        self.cell(w_desc + w_unit + w_qtd, self.line_h, "Total Geral", border=1)
+        total_val = sum(s['total_item'] for s in servicos)
+        self.cell(w_total, self.line_h, f"R$ {total_val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'), border=1, ln=1)
 
-        # Valor e Data
-        cy += self.line_h + 2
-        self.set_xy(cx, cy)
-        self.set_font("Arial","B",self.font_bold)
-        self.cell(25,self.line_h, "Valor:")
-        self.set_font("Arial","",self.font_norm)
-        self.cell(0,self.line_h, format_currency(m['valor_total']), 0, 1)
-
-        cy += self.line_h + 1
-        self.set_xy(cx, cy)
-        self.set_font("Arial","B",self.font_bold)
-        self.cell(25, self.line_h, "Data:")
-        self.set_font("Arial","",self.font_norm)
-        self.cell(0, self.line_h, format_date(m['data_manutencao']), 0, 1)
-
-        # Observação antes dos serviços
-        cy += self.line_h + 2
-        self.set_xy(cx, cy)
-        self.set_font("Arial","B",self.font_bold)
-        self.cell(0, self.line_h, "Observação:")
-        cy += self.line_h + 1
-        self.set_xy(cx, cy)
-        self.set_font("Arial","",self.font_norm)
-        self.multi_cell(self.card_w-8, self.line_h, format_none(m['observacao']))
-        after_obs = self.get_y()
-        if after_obs > y + base_h:
-            base_h = after_obs - y + 6
-
-        # Serviços (abaixo da observação)
-        if m.get('servicos'):
-            cy = after_obs + 2
-            self.set_xy(cx, cy)
-            self.set_font("Arial","B",self.font_bold)
-            self.cell(0, self.line_h, "Serviços:")
-            for serv in m['servicos']:
-                cy += self.line_h + 1
-                self.set_xy(cx+4, cy)
-                self.set_font("Arial","",self.font_norm)
-                self.multi_cell(self.card_w-10, self.line_h, f"- {serv['descricao']}: {format_currency(serv['valor'])}")
-                after_serv = self.get_y()
-                if after_serv > y + base_h:
-                    base_h = after_serv - y + 6
-
-        # redesenha o fundo para nova altura, se mudou
-        if base_h != self.card_h:
-            self.rect(x, y, self.card_w, base_h, 'F')
-            self.card_h = base_h
-        # reposiciona ponteiro pro próximo card
-        self.set_xy(0, y)
 
 class CustomReceitaDespesaPDF(FPDF):
     def __init__(self):
@@ -986,13 +949,18 @@ def criar_pdf_manutencao():
             }
         # adiciona serviço se existir
         if desc:
-            temp[id_m]['servicos'].append({'descricao': desc, 'valor': serv_val})
+            temp[id_m]['servicos'].append({
+                'descricao': desc,
+                'valor_unitario': float(valor) if valor is not None else 0.0,
+                'quantidade': int(quantidade) if quantidade is not None else 0,
+                'total_item': float(valor_item) if valor_item is not None else 0.0
+            })
 
     manutencoes = list(temp.values())
 
     # Gera PDF
     pdf = CustomManutencaoPDF()
-    pdf.create_manutencao_cards(manutencoes)
+    pdf.create_manutencao_report(manutencoes)
     filename = f"relatorio_manutencoes.pdf"
     pdf.output(filename)
     return send_file(
