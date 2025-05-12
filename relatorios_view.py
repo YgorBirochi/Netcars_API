@@ -705,6 +705,274 @@ class CustomReceitaDespesaPDF(FPDF):
         saldo_str = f"{saldo:,.2f}"
         self.cell(0, 8, f"Saldo Final: R$ {saldo_str}", 0, 1, 'R')
 
+class CustomParcelamentoPDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        self.set_title("Relatório de Parcelamentos")
+        self.set_author("Sistema Financeiro")
+
+        # Cores
+        self.primary_color = (33, 37, 41)  # quase preto
+        self.accent_color = (108, 29, 233)  # roxo vivo para destaques de seções, se quiser
+        self.header_bg = (108, 29, 233)  # roxo suave para cabeçalho da tabela
+        self.row_alt_bg = (245, 245, 245)  # cinza suave para linhas alternadas
+
+        # Altura de linha e largura de colunas
+        self.line_h = 7
+        self.col_widths = [20, 35, 35, 30, 30, 30]
+
+        # Flag para controlar reaparecimento de cabeçalho da tabela
+        self.in_table = False
+
+        # Margem inferior para auto page break
+        self.set_auto_page_break(auto=True, margin=20)
+
+    def header(self):
+        if self.in_table:
+            # Só cabeçalho da tabela
+            self._draw_table_header()
+            return
+
+        # Cabeçalho completo (título + data + linha)
+        self.set_font("Arial", "B", 16)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, 12, "Relatório de Parcelamentos", ln=1, align="C")
+
+        self.set_font("Arial", "", 10)
+        self.set_text_color(100, 100, 100)
+        self.cell(0, 6, f"Gerado em {datetime.now():%d/%m/%Y %H:%M}", ln=1, align="C")
+
+        self.ln(2)
+        self.set_draw_color(*self.primary_color)
+        self.set_line_width(0.5)
+        self.line(10, self.get_y(), self.w - 10, self.get_y())
+        self.ln(6)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Arial", "I", 8)
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
+
+    def _draw_table_header(self):
+        """Desenha o cabeçalho da tabela de parcelas (fundo roxo + texto branco)."""
+        self.set_font("Arial", "B", 10)
+        self.set_fill_color(*self.header_bg)
+        self.set_text_color(255, 255, 255)
+        headers = ["Parcela", "Vencimento", "Pagamento", "Valor (R$)", "Amortização", "Status"]
+        aligns = ["C", "C", "C", "R", "R", "C"]
+        for w, h, a in zip(self.col_widths, headers, aligns):
+            self.cell(w, self.line_h, h, border=1, align=a, fill=True)
+        self.ln(self.line_h)
+        # retorna cor de texto para dados
+        self.set_text_color(*self.primary_color)
+
+    def add_parcelamento(self, dados):
+        # Inicie nova página / reset de contexto
+        self.add_page()
+        self.alias_nb_pages()
+
+        # ——————————————————————————————————————————————
+        # 1) Seção de 3 colunas: Cliente | Veículo | Financiamento
+        usable_width = self.w - 20
+        col_w = usable_width / 3
+
+        # Títulos das colunas
+        self.set_font("Arial", "B", 12)
+        self.set_text_color(*self.primary_color)
+        self.cell(col_w, self.line_h, "Dados do Cliente", ln=0)
+        self.cell(col_w, self.line_h, "Veículo", ln=0)
+        self.cell(col_w, self.line_h, "Financiamento", ln=1)
+
+        # Conteúdo das colunas
+        self.set_font("Arial", "", 10)
+        self.set_text_color(33, 37, 41)
+        cli = dados['cliente']
+        v = dados['veiculo']
+        total = format_currency(dados['total'])
+        entrada = format_currency(dados['entrada'])
+        qtd = f"{dados['qnt_parcelas']}x"
+
+        # 1ª linha
+        self.cell(col_w, self.line_h, f"Nome: {cli['nome']}", ln=0)
+        self.cell(col_w, self.line_h, f"{v['marca']} {v['modelo']}", ln=0)
+        self.cell(col_w, self.line_h, f"Total: {total}", ln=1)
+
+        # 2ª linha
+        self.cell(col_w, self.line_h, f"CPF/CNPJ: {format_cpf_cnpj(cli['cpf_cnpj'])}", ln=0)
+        self.cell(col_w, self.line_h, f"Placa: {v['placa']}", ln=0)
+        self.cell(col_w, self.line_h, f"Entrada: {entrada}", ln=1)
+
+        # 3ª linha
+        self.cell(col_w, self.line_h, f"Telefone: {format_phone(cli['telefone'])}", ln=0)
+        self.cell(col_w, self.line_h, f"Ano: {v['ano_modelo']}/{v['ano_fabricacao']}", ln=0)
+        self.cell(col_w, self.line_h, f"Parcelas: {qtd}", ln=1)
+
+        self.ln(8)
+
+        # ——————————————————————————————————————————————
+        # 2) Tabela de Parcelas
+        self.in_table = True
+        self._draw_table_header()
+
+        status_map = {1: "Pendente", 2: "Vencida", 3: "Paga", 4: "Amortizada"}
+        self.set_font("Arial", "", 9)
+
+        for i, p in enumerate(dados['parcelas']):
+            # Em cada nova linha, verifica se entrou em nova página:
+            # se o y ultrapassar o limite, o header() vai redesenhar só o cabeçalho da tabela.
+            fill = (i % 2 == 0)
+            if fill:
+                self.set_fill_color(*self.row_alt_bg)
+
+            vals = [
+                str(p['num']),
+                format_date(p['venc']),
+                format_date(p['pag']) if p['pag'] else "-",
+                format_currency(p['valor']),
+                format_currency(p['amort']),
+                status_map.get(p['status'], str(p['status']))
+            ]
+
+            for w, txt, align in zip(self.col_widths, vals, ["C", "C", "C", "R", "R", "C"]):
+                self.cell(w, self.line_h, txt, border=1, align=align, fill=fill)
+            self.ln(self.line_h)
+
+        # Finaliza a tabela antes do próximo parcelamento
+        self.in_table = False
+        self.ln(6)
+
+
+class CustomClientesComprasPDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        self.set_title("Relatório de Clientes e Compras")
+        self.set_author("Sistema de Relatórios")
+        self.primary_color = (56, 56, 56)
+        self.accent_color = (40, 120, 220)
+
+        self.card_height = 70
+        self.card_margin_x = 10
+        self.card_width = 90
+        self.card_spacing_x = 10
+        self.card_spacing_y = 10
+        self.line_height = 5
+        self.normal_font_size = 9
+        self.bold_font_size = 9
+
+    def header(self):
+        self.set_font("Arial", "B", 14)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, 10, "Relatório de Clientes e Compras", 0, 1, "C")
+
+        self.set_font("Arial", "", 10)
+        self.cell(0, 6, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, "C")
+
+        self.ln(2)
+        self.set_line_width(0.5)
+        self.set_draw_color(*self.primary_color)
+        self.line(10, self.get_y() + 2, self.w - 10, self.get_y() + 2)
+        self.ln(8)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Arial", "I", 10)
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
+
+    def create_clientes_compras_list(self, clientes):
+        self.alias_nb_pages()
+        total_compras = 0
+
+        if not clientes:
+            self.add_page()
+            self.ln(10)
+            self.set_font("Arial", "", 12)
+            self.cell(0, 10, "Nenhum cliente com compra encontrado.", ln=True, align="C")
+            self.ln(8)
+            self.set_font("Arial", "B", 14)
+            self.cell(0, 10, "Total de registros: 0", ln=True, align="C")
+            return
+
+        for cliente_id, dados in clientes.items():
+            compras = dados['compras']
+            total_compras += len(compras)
+
+            self.add_page()
+            self.set_font("Arial", "B", 12)
+            self.cell(0, 10, f"Cliente: {dados['nome']} - CPF/CNPJ: {format_cpf_cnpj(dados['cpf_cnpj'])}", ln=True)
+            self.set_font("Arial", "", 11)
+            self.cell(0, 8, f"Email: {dados['email']} | Telefone: {format_phone(dados['telefone'])}", ln=True)
+            self.cell(0, 8, f"Nascimento: {format_date(dados['nascimento'])}", ln=True)
+            self.ln(5)
+
+            # Reset grid control
+            self.current_page_y = self.get_y()
+            for i, compra in enumerate(compras):
+                if i != 0 and i % 8 == 0:
+                    self.add_page()
+                    self.current_page_y = 35
+
+                row = (i % 8) // 2
+                col = (i % 2)
+
+                card_x = self.card_margin_x + col * (self.card_width + self.card_spacing_x)
+                card_y = self.current_page_y + row * (self.card_height + self.card_spacing_y)
+
+                self._draw_card(compra, card_x, card_y)
+
+            self.ln(10)  # Espaço entre clientes
+
+        self.set_y(-30)
+        self.set_font("Arial", "B", 14)
+        self.cell(0, 10, f"Total de compras: {total_compras}", ln=True, align="C")
+
+    def _draw_card(self, data, x, y):
+        self.set_fill_color(245, 245, 245)
+        self.rect(x, y, self.card_width, self.card_height, "F")
+
+        self.set_xy(x + 5, y + 5)
+        self.set_font("Arial", "B", 10)
+        self.set_text_color(*self.primary_color)
+
+        # Cabeçalho do cartão: veículo
+        veiculo = f"{data['marca']} {data['modelo']} {data['ano_modelo']}/{data['ano_fabricacao']}"
+        veiculo = self._truncate_text(veiculo, self.card_width - 10, "Arial", "B", 10)
+        self.cell(self.card_width - 10, 6, veiculo, ln=1)
+
+        y_pos = y + 14
+        fields = [
+            ("Cor", data.get("cor", "")),
+            ("Placa", data.get("placa", "")),
+            ("Tipo", data.get("tipo_veiculo", "")),
+            ("Venda", format_date(data['data_venda']) if data.get("data_venda") else ""),
+            ("Valor", format_currency(data['valor_total']) if data.get("valor_total") else ""),
+            ("Forma de Pagamento", data.get("forma_pagamento", "")),
+            ("Valor de Entrada", format_currency(data.get('entrada', 0)) if data.get('entrada') else "N/A"),
+            ("Valor em Aberto", format_currency(data.get('valor_fin_aberto', 0)) if data.get('valor_fin_aberto') else "N/A"),
+            ("Valor Pago", format_currency(data.get('valor_fin_pago', 0)) if data.get('valor_fin_pago') else "N/A"),
+        ]
+
+        for label, value in fields:
+            self.set_xy(x + 5, y_pos)
+            self.set_font("Arial", "", 9)
+            self.cell(40, self.line_height, f"{label}:", 0, 0)
+            self.set_xy(x + 45, y_pos)
+            self.set_font("Arial", "B", 9)
+            self.cell(self.card_width - 50, self.line_height, str(value), 0, 0)
+            y_pos += self.line_height + 1
+
+    def _truncate_text(self, text, max_width, font_family, font_style, font_size):
+        self.set_font(font_family, font_style, font_size)
+        if self.get_string_width(text) <= max_width:
+            return text
+        for i in range(len(text), 0, -1):
+            truncated = text[:i] + "..."
+            if self.get_string_width(truncated) <= max_width:
+                return truncated
+        return "..."
+
+
 # Fim das Classes
 
 # Início das Rotas
@@ -1043,135 +1311,6 @@ def criar_pdf_receita_despesa():
         download_name=filename
     )
 
-class CustomClientesComprasPDF(FPDF):
-    def __init__(self):
-        super().__init__()
-        self.set_title("Relatório de Clientes e Compras")
-        self.set_author("Sistema de Relatórios")
-        self.primary_color = (56, 56, 56)
-        self.accent_color = (40, 120, 220)
-
-        self.card_height = 70
-        self.card_margin_x = 10
-        self.card_width = 90
-        self.card_spacing_x = 10
-        self.card_spacing_y = 10
-        self.line_height = 5
-        self.normal_font_size = 9
-        self.bold_font_size = 9
-
-    def header(self):
-        self.set_font("Arial", "B", 14)
-        self.set_text_color(*self.primary_color)
-        self.cell(0, 10, "Relatório de Clientes e Compras", 0, 1, "C")
-
-        self.set_font("Arial", "", 10)
-        self.cell(0, 6, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, "C")
-
-        self.ln(2)
-        self.set_line_width(0.5)
-        self.set_draw_color(*self.primary_color)
-        self.line(10, self.get_y() + 2, self.w - 10, self.get_y() + 2)
-        self.ln(8)
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("Arial", "I", 10)
-        self.set_text_color(150, 150, 150)
-        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
-
-    def create_clientes_compras_list(self, clientes):
-        self.alias_nb_pages()
-        total_compras = 0
-
-        if not clientes:
-            self.add_page()
-            self.ln(10)
-            self.set_font("Arial", "", 12)
-            self.cell(0, 10, "Nenhum cliente com compra encontrado.", ln=True, align="C")
-            self.ln(8)
-            self.set_font("Arial", "B", 14)
-            self.cell(0, 10, "Total de registros: 0", ln=True, align="C")
-            return
-
-        for cliente_id, dados in clientes.items():
-            compras = dados['compras']
-            total_compras += len(compras)
-
-            self.add_page()
-            self.set_font("Arial", "B", 12)
-            self.cell(0, 10, f"Cliente: {dados['nome']} - CPF/CNPJ: {format_cpf_cnpj(dados['cpf_cnpj'])}", ln=True)
-            self.set_font("Arial", "", 11)
-            self.cell(0, 8, f"Email: {dados['email']} | Telefone: {format_phone(dados['telefone'])}", ln=True)
-            self.cell(0, 8, f"Nascimento: {format_date(dados['nascimento'])}", ln=True)
-            self.ln(5)
-
-            # Reset grid control
-            self.current_page_y = self.get_y()
-            for i, compra in enumerate(compras):
-                if i != 0 and i % 8 == 0:
-                    self.add_page()
-                    self.current_page_y = 35
-
-                row = (i % 8) // 2
-                col = (i % 2)
-
-                card_x = self.card_margin_x + col * (self.card_width + self.card_spacing_x)
-                card_y = self.current_page_y + row * (self.card_height + self.card_spacing_y)
-
-                self._draw_card(compra, card_x, card_y)
-
-            self.ln(10)  # Espaço entre clientes
-
-        self.set_y(-30)
-        self.set_font("Arial", "B", 14)
-        self.cell(0, 10, f"Total de compras: {total_compras}", ln=True, align="C")
-
-    def _draw_card(self, data, x, y):
-        self.set_fill_color(245, 245, 245)
-        self.rect(x, y, self.card_width, self.card_height, "F")
-
-        self.set_xy(x + 5, y + 5)
-        self.set_font("Arial", "B", 10)
-        self.set_text_color(*self.primary_color)
-
-        # Cabeçalho do cartão: veículo
-        veiculo = f"{data['marca']} {data['modelo']} {data['ano_modelo']}/{data['ano_fabricacao']}"
-        veiculo = self._truncate_text(veiculo, self.card_width - 10, "Arial", "B", 10)
-        self.cell(self.card_width - 10, 6, veiculo, ln=1)
-
-        y_pos = y + 14
-        fields = [
-            ("Cor", data.get("cor", "")),
-            ("Placa", data.get("placa", "")),
-            ("Tipo", data.get("tipo_veiculo", "")),
-            ("Venda", format_date(data['data_venda']) if data.get("data_venda") else ""),
-            ("Valor", format_currency(data['valor_total']) if data.get("valor_total") else ""),
-            ("Forma de Pagamento", data.get("forma_pagamento", "")),
-            ("Valor de Entrada", format_currency(data.get('entrada', 0)) if data.get('entrada') else "N/A"),
-            ("Valor em Aberto", format_currency(data.get('valor_fin_aberto', 0)) if data.get('valor_fin_aberto') else "N/A"),
-            ("Valor Pago", format_currency(data.get('valor_fin_pago', 0)) if data.get('valor_fin_pago') else "N/A"),
-        ]
-
-        for label, value in fields:
-            self.set_xy(x + 5, y_pos)
-            self.set_font("Arial", "", 9)
-            self.cell(40, self.line_height, f"{label}:", 0, 0)
-            self.set_xy(x + 45, y_pos)
-            self.set_font("Arial", "B", 9)
-            self.cell(self.card_width - 50, self.line_height, str(value), 0, 0)
-            y_pos += self.line_height + 1
-
-    def _truncate_text(self, text, max_width, font_family, font_style, font_size):
-        self.set_font(font_family, font_style, font_size)
-        if self.get_string_width(text) <= max_width:
-            return text
-        for i in range(len(text), 0, -1):
-            truncated = text[:i] + "..."
-            if self.get_string_width(truncated) <= max_width:
-                return truncated
-        return "..."
-
 # Relatorio de Clientes e Compras
 @app.route('/relatorio/cliente_compras', methods=['GET'])
 def criar_pdf_clientes_compras():
@@ -1275,150 +1414,6 @@ def criar_pdf_clientes_compras():
         download_name=filename
     )
 
-# --- Nova rota em seu Flask app ---
-
-
-class CustomParcelamentoPDF(FPDF):
-    def __init__(self):
-        super().__init__()
-        self.set_title("Relatório de Parcelamentos")
-        self.set_author("Sistema Financeiro")
-
-        # Cores
-        self.primary_color = (33, 37, 41)       # quase preto
-        self.accent_color  = (108, 29, 233)     # roxo vivo para destaques de seções, se quiser
-        self.header_bg     = (108, 29, 233)    # roxo suave para cabeçalho da tabela
-        self.row_alt_bg    = (245, 245, 245)    # cinza suave para linhas alternadas
-
-        # Altura de linha e largura de colunas
-        self.line_h     = 7
-        self.col_widths = [20, 35, 35, 30, 30, 30]
-
-        # Flag para controlar reaparecimento de cabeçalho da tabela
-        self.in_table = False
-
-        # Margem inferior para auto page break
-        self.set_auto_page_break(auto=True, margin=20)
-
-
-    def header(self):
-        if self.in_table:
-            # Só cabeçalho da tabela
-            self._draw_table_header()
-            return
-
-        # Cabeçalho completo (título + data + linha)
-        self.set_font("Arial", "B", 16)
-        self.set_text_color(*self.primary_color)
-        self.cell(0, 12, "Relatório de Parcelamentos", ln=1, align="C")
-
-        self.set_font("Arial", "", 10)
-        self.set_text_color(100, 100, 100)
-        self.cell(0, 6, f"Gerado em {datetime.now():%d/%m/%Y %H:%M}", ln=1, align="C")
-
-        self.ln(2)
-        self.set_draw_color(*self.primary_color)
-        self.set_line_width(0.5)
-        self.line(10, self.get_y(), self.w - 10, self.get_y())
-        self.ln(6)
-
-
-    def footer(self):
-        self.set_y(-15)
-        self.set_font("Arial", "I", 8)
-        self.set_text_color(150, 150, 150)
-        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
-
-
-    def _draw_table_header(self):
-        """Desenha o cabeçalho da tabela de parcelas (fundo roxo + texto branco)."""
-        self.set_font("Arial", "B", 10)
-        self.set_fill_color(*self.header_bg)
-        self.set_text_color(255, 255, 255)
-        headers = ["Parcela","Vencimento","Pagamento","Valor (R$)","Amortização","Status"]
-        aligns  = ["C","C","C","R","R","C"]
-        for w, h, a in zip(self.col_widths, headers, aligns):
-            self.cell(w, self.line_h, h, border=1, align=a, fill=True)
-        self.ln(self.line_h)
-        # retorna cor de texto para dados
-        self.set_text_color(*self.primary_color)
-
-    def add_parcelamento(self, dados):
-        # Inicie nova página / reset de contexto
-        self.add_page()
-        self.alias_nb_pages()
-
-        # ——————————————————————————————————————————————
-        # 1) Seção de 3 colunas: Cliente | Veículo | Financiamento
-        usable_width = self.w - 20
-        col_w = usable_width / 3
-
-        # Títulos das colunas
-        self.set_font("Arial", "B", 12)
-        self.set_text_color(*self.primary_color)
-        self.cell(col_w, self.line_h, "Dados do Cliente", ln=0)
-        self.cell(col_w, self.line_h, "Veículo", ln=0)
-        self.cell(col_w, self.line_h, "Financiamento", ln=1)
-
-        # Conteúdo das colunas
-        self.set_font("Arial", "", 10)
-        self.set_text_color(33, 37, 41)
-        cli = dados['cliente']
-        v = dados['veiculo']
-        total = format_currency(dados['total'])
-        entrada = format_currency(dados['entrada'])
-        qtd = f"{dados['qnt_parcelas']}x"
-
-        # 1ª linha
-        self.cell(col_w, self.line_h, f"Nome: {cli['nome']}", ln=0)
-        self.cell(col_w, self.line_h, f"{v['marca']} {v['modelo']}", ln=0)
-        self.cell(col_w, self.line_h, f"Total: {total}", ln=1)
-
-        # 2ª linha
-        self.cell(col_w, self.line_h, f"CPF/CNPJ: {format_cpf_cnpj(cli['cpf_cnpj'])}", ln=0)
-        self.cell(col_w, self.line_h, f"Placa: {v['placa']}", ln=0)
-        self.cell(col_w, self.line_h, f"Entrada: {entrada}", ln=1)
-
-        # 3ª linha
-        self.cell(col_w, self.line_h, f"Telefone: {format_phone(cli['telefone'])}", ln=0)
-        self.cell(col_w, self.line_h, f"Ano: {v['ano_modelo']}/{v['ano_fabricacao']}", ln=0)
-        self.cell(col_w, self.line_h, f"Parcelas: {qtd}", ln=1)
-
-        self.ln(8)
-
-        # ——————————————————————————————————————————————
-        # 2) Tabela de Parcelas
-        self.in_table = True
-        self._draw_table_header()
-
-        status_map = {1: "Pendente", 2: "Vencida", 3: "Paga", 4: "Amortizada"}
-        self.set_font("Arial", "", 9)
-
-        for i, p in enumerate(dados['parcelas']):
-            # Em cada nova linha, verifica se entrou em nova página:
-            # se o y ultrapassar o limite, o header() vai redesenhar só o cabeçalho da tabela.
-            fill = (i % 2 == 0)
-            if fill:
-                self.set_fill_color(*self.row_alt_bg)
-
-            vals = [
-                str(p['num']),
-                format_date(p['venc']),
-                format_date(p['pag']) if p['pag'] else "-",
-                format_currency(p['valor']),
-                format_currency(p['amort']),
-                status_map.get(p['status'], str(p['status']))
-            ]
-
-            for w, txt, align in zip(self.col_widths, vals, ["C", "C", "C", "R", "R", "C"]):
-                self.cell(w, self.line_h, txt, border=1, align=align, fill=fill)
-            self.ln(self.line_h)
-
-        # Finaliza a tabela antes do próximo parcelamento
-        self.in_table = False
-        self.ln(6)
-
-
 @app.route('/relatorio/parcelamentos', methods=['GET'])
 def criar_pdf_parcelamentos():
     q = request.args.get('q', '').strip()
@@ -1512,7 +1507,7 @@ def criar_pdf_parcelamentos():
         pdf.add_parcelamento(dados)
 
     cursor.close()
-    filename = f"relatorio_parcelamentos_{datetime.now():%Y%m%d}.pdf"
+    filename = f"relatorio_parcelamentos.pdf"
     pdf.output(filename)
     return send_file(
         filename,
