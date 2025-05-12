@@ -1259,7 +1259,6 @@ def criar_pdf_clientes_compras():
     cursor.execute(query, params)
     rows = cursor.fetchall()
     cursor.close()
-    con.close()
 
     # Estruturar os dados agrupados por cliente
     clientes = {}
