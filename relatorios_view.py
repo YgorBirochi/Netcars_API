@@ -1205,7 +1205,7 @@ class CustomClientesComprasPDF(FPDF):
         return "..."
 
 # Relatorio de Clientes e Compras
-@app.route('/relatorio/ClientesCompras', methods=['GET'])
+@app.route('/relatorio/cliente_compras', methods=['GET'])
 def criar_pdf_clientes_compras():
     # Parâmetros de filtro (opcional)
     cliente = request.args.get('cliente', '').strip()
