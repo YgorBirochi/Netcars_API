@@ -185,96 +185,133 @@ def buscar_financiamento():
 
     cursor = con.cursor()
 
-    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    try:
+        cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
 
-    user = cursor.fetchone()
+        user = cursor.fetchone()
 
-    if not user:
-        return jsonify({
-            'error': 'Usuário não encontrado.'
-        }), 400
+        if not user:
+            return jsonify({
+                'error': 'Usuário não encontrado.'
+            }), 400
 
-    tipo_usuario = user[0]
+        tipo_usuario = user[0]
 
-    if tipo_usuario in [1, 2]:
-        cursor.execute("SELECT ID_FINANCIAMENTO FROM FINANCIAMENTO")
-        data_financiamento = cursor.fetchone()
+        if tipo_usuario in [1, 2]:
+            cursor.execute("SELECT ID_FINANCIAMENTO FROM FINANCIAMENTO")
+            data_financiamento = cursor.fetchall()
 
-        if not data_financiamento:
-            return jsonify({'error': 'Nenhnum financiamento encontrado.'}), 400
-    else:
-        cursor.execute('''
-            SELECT ID_FINANCIAMENTO, ENTRADA, QNT_PARCELAS, TIPO_VEICULO, ID_VEICULO, VALOR_TOTAL 
-            FROM FINANCIAMENTO WHERE ID_USUARIO = ?
-        ''', (id_usuario,))
+            if not data_financiamento:
+                return jsonify({'error': 'Nenhnum financiamento encontrado.'}), 400
 
-        data_financiamento = cursor.fetchall()
+            lista_ids_financ = [row[0] for row in data_financiamento]
 
-        if not data_financiamento:
-            return jsonify({'error': 'Nenhnum financiamento encontrado.'}), 400
+            em_andamento = 0
+            concluidos = 0
 
-        id_financiamento = data_financiamento[0][0]
-        entrada = data_financiamento[0][1]
-        qnt_parcelas = data_financiamento[0][2]
-        tipo_veiculo = data_financiamento[0][3]
-        id_veiculo = data_financiamento[0][4]
-        valor_total = data_financiamento[0][5]
+            for id_financ in lista_ids_financ:
+                cursor.execute('''
+                        SELECT STATUS 
+                        FROM FINANCIAMENTO_PARCELA
+                        WHERE ID_FINANCIAMENTO = ?
+                    ''', (id_financ,))
 
-        cursor.execute('''
-            SELECT NUM_PARCELA, VALOR_PARCELA, VALOR_PARCELA_AMORTIZADA, DATA_VENCIMENTO, DATA_PAGAMENTO, STATUS 
-            FROM FINANCIAMENTO_PARCELA WHERE ID_FINANCIAMENTO = ? ORDER BY DATA_VENCIMENTO ASC
-        ''', (id_financiamento,))
+                lista_status = [row[0] for row in cursor.fetchall()]
 
-        data_parcelas = cursor.fetchall()
+                soma = 0
+                for status in lista_status:
+                    if status not in [3, 4]:
+                        em_andamento += 1
+                        break
+                    else:
+                        soma += 1
 
-        lista_parcelas = []
-        for parcela in data_parcelas:
-            info = {
-                "num_parcela": parcela[0],
-                "valor_parcela": parcela[1],
-                "valor_parcela_amortizada": parcela[2],
-                "data_vencimento": parcela[3],
-                "data_pagamento": parcela[4],
-                "status": parcela[5]
-            }
+                if soma == len(lista_status):
+                    concluidos += 1
 
-            lista_parcelas.append(info)
-
-        if tipo_veiculo == 1:
-            cursor.execute("SELECT MARCA, MODELO, ANO_FABRICACAO, ANO_MODELO, VERSAO FROM CARROS WHERE ID_CARRO = ?", (id_veiculo,))
-
-            dados_veiculo = cursor.fetchall()[0]
-
-            json_veiculo = {
-                "id_veiculo": id_veiculo,
-                "tipo_veiculo": tipo_veiculo,
-                "marca": dados_veiculo[0],
-                "modelo": dados_veiculo[1],
-                "ano_fabricacao": dados_veiculo[2],
-                "ano_modelo": dados_veiculo[3],
-                "versao": dados_veiculo[4]
-            }
+            return jsonify({
+                'total': len(lista_ids_financ),
+                'concluidos': concluidos,
+                'em_andamento': em_andamento
+            }), 200
         else:
-            cursor.execute("SELECT MARCA, MODELO, ANO_FABRICACAO, ANO_MODELO FROM MOTOS WHERE ID_MOTO = ?", (id_veiculo,))
+            cursor.execute('''
+                    SELECT ID_FINANCIAMENTO, ENTRADA, QNT_PARCELAS, TIPO_VEICULO, ID_VEICULO, VALOR_TOTAL 
+                    FROM FINANCIAMENTO WHERE ID_USUARIO = ?
+                ''', (id_usuario,))
 
-            dados_veiculo = cursor.fetchall()[0]
+            data_financiamento = cursor.fetchall()
 
-            json_veiculo = {
-                "id_veiculo": id_veiculo,
-                "tipo_veiculo": tipo_veiculo,
-                "marca": dados_veiculo[0],
-                "modelo": dados_veiculo[1],
-                "ano_fabricacao": dados_veiculo[2],
-                "ano_modelo": dados_veiculo[3]
-            }
+            if not data_financiamento:
+                return jsonify({'error': 'Nenhnum financiamento encontrado.'}), 400
 
-        return jsonify({
-            "entrada": entrada,
-            "qnt_parcelas": qnt_parcelas,
-            "valor_total": valor_total,
-            "lista_parcelas": lista_parcelas,
-            "dados_veiculo": json_veiculo
-        })
+            id_financiamento = data_financiamento[0][0]
+            entrada = data_financiamento[0][1]
+            qnt_parcelas = data_financiamento[0][2]
+            tipo_veiculo = data_financiamento[0][3]
+            id_veiculo = data_financiamento[0][4]
+            valor_total = data_financiamento[0][5]
+
+            cursor.execute('''
+                    SELECT NUM_PARCELA, VALOR_PARCELA, VALOR_PARCELA_AMORTIZADA, DATA_VENCIMENTO, DATA_PAGAMENTO, STATUS 
+                    FROM FINANCIAMENTO_PARCELA WHERE ID_FINANCIAMENTO = ? ORDER BY DATA_VENCIMENTO ASC
+                ''', (id_financiamento,))
+
+            data_parcelas = cursor.fetchall()
+
+            lista_parcelas = []
+            for parcela in data_parcelas:
+                info = {
+                    "num_parcela": parcela[0],
+                    "valor_parcela": parcela[1],
+                    "valor_parcela_amortizada": parcela[2],
+                    "data_vencimento": parcela[3],
+                    "data_pagamento": parcela[4],
+                    "status": parcela[5]
+                }
+
+                lista_parcelas.append(info)
+
+            if tipo_veiculo == 1:
+                cursor.execute(
+                    "SELECT MARCA, MODELO, ANO_FABRICACAO, ANO_MODELO, VERSAO FROM CARROS WHERE ID_CARRO = ?",
+                    (id_veiculo,))
+
+                dados_veiculo = cursor.fetchall()[0]
+
+                json_veiculo = {
+                    "id_veiculo": id_veiculo,
+                    "tipo_veiculo": tipo_veiculo,
+                    "marca": dados_veiculo[0],
+                    "modelo": dados_veiculo[1],
+                    "ano_fabricacao": dados_veiculo[2],
+                    "ano_modelo": dados_veiculo[3],
+                    "versao": dados_veiculo[4]
+                }
+            else:
+                cursor.execute("SELECT MARCA, MODELO, ANO_FABRICACAO, ANO_MODELO FROM MOTOS WHERE ID_MOTO = ?",
+                               (id_veiculo,))
+
+                dados_veiculo = cursor.fetchall()[0]
+
+                json_veiculo = {
+                    "id_veiculo": id_veiculo,
+                    "tipo_veiculo": tipo_veiculo,
+                    "marca": dados_veiculo[0],
+                    "modelo": dados_veiculo[1],
+                    "ano_fabricacao": dados_veiculo[2],
+                    "ano_modelo": dados_veiculo[3]
+                }
+
+            return jsonify({
+                "entrada": entrada,
+                "qnt_parcelas": qnt_parcelas,
+                "valor_total": valor_total,
+                "lista_parcelas": lista_parcelas,
+                "dados_veiculo": json_veiculo
+            })
+    finally:
+        cursor.close()
 
 @app.route('/gerar_qrcode_parcela/<tipo>', methods=['GET'])
 def gerar_qrcode_parcela_atual(tipo):

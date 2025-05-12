@@ -483,9 +483,6 @@ def add_manutencao_servico():
 
         id_manutencao_servico = cursor.fetchone()[0]
 
-        # Atualizar o valor total da manutenção
-        atualizar_valor_total(id_manutencao)
-
         con.commit()
 
         return jsonify({
@@ -536,9 +533,6 @@ def remove_manutencao_servico(id_manutencao, id_servico):
             DELETE FROM MANUTENCAO_SERVICOS 
             WHERE ID_MANUTENCAO = ? AND ID_SERVICOS = ?
         ''', (id_manutencao, id_servico))
-
-        # Atualizar o valor total da manutenção
-        atualizar_valor_total(id_manutencao)
 
         con.commit()
 
@@ -608,7 +602,6 @@ def update_manutencao_servico(id_manutencao):
                 WHERE ID_MANUTENCAO = ? AND ID_SERVICOS = ?
             ''', (quantidade, valor_total_item, id_manutencao, id_servico))
 
-        atualizar_valor_total(id_manutencao)
         con.commit()
 
         return jsonify({'success': 'Serviço atualizado!'}), 200
@@ -727,7 +720,6 @@ def update_manutencao_servico_v2(id_manutencao, id_servico):
                 AND ID_SERVICOS = ?
             ''', (novo_id_servico, quantidade, valor_total_item, id_manutencao, id_servico))
 
-        atualizar_valor_total(id_manutencao)
         con.commit()
 
         return jsonify({'success': 'Serviço atualizado com sucesso!'}), 200
@@ -736,32 +728,6 @@ def update_manutencao_servico_v2(id_manutencao, id_servico):
         con.rollback()
         print(f"Erro interno: {str(e)}")
         return jsonify({'error': f'Erro interno: {str(e)}'}), 500
-    finally:
-        cursor.close()
-
-
-def atualizar_valor_total(id_manutencao):
-    cursor = con.cursor()
-    try:
-        # Soma correta dos VALOR_TOTAL_ITEM
-        cursor.execute('''
-            SELECT COALESCE(SUM(VALOR_TOTAL_ITEM), 0) 
-            FROM MANUTENCAO_SERVICOS 
-            WHERE ID_MANUTENCAO = ?
-        ''', (id_manutencao,))
-
-        total = cursor.fetchone()[0]
-
-        cursor.execute('''
-            UPDATE MANUTENCAO 
-            SET VALOR_TOTAL = ?
-            WHERE ID_MANUTENCAO = ?
-        ''', (float(total), id_manutencao))
-
-        con.commit()
-    except Exception as e:
-        con.rollback()
-        print(f"Erro ao atualizar valor total: {str(e)}")
     finally:
         cursor.close()
 
@@ -803,39 +769,6 @@ def get_servico_id(id):
         return jsonify({'error': str(e)}), 400
     finally:
         cursor.close()
-
-# Função para atualizar o valor total
-def atualizar_valor_total(id_manutencao):
-    cursor = con.cursor()
-
-    try:
-        cursor.execute('''
-                        SELECT ID_SERVICOS FROM MANUTENCAO_SERVICOS
-                        WHERE ID_MANUTENCAO = ?
-                    ''', (id_manutencao,))
-
-        ids_servicos = [row[0] for row in cursor.fetchall()]
-
-        valor_total = 0
-
-        for id in ids_servicos:
-            cursor.execute('''
-                        SELECT VALOR FROM SERVICOS WHERE ATIVO IS TRUE AND ID_SERVICOS = ?
-                        ''', (id,))
-            valor = cursor.fetchone()
-
-            if not valor or valor is None:
-                continue
-
-            valor_total += valor[0]
-
-        cursor.execute('''
-            UPDATE MANUTENCAO SET VALOR_TOTAL = ?
-            WHERE ID_MANUTENCAO = ?
-        ''', (valor_total, id_manutencao))
-    finally:
-        cursor.close()
-
 
 @app.route('/servicos', methods=['POST'])
 def post_servico():
@@ -949,10 +882,6 @@ def put_servico(id_servicos):
         ''', (id_servicos,))
         resultado = cursor.fetchone()
 
-        if resultado:  # Só atualiza se existir relacionamento
-            id_manutencao = resultado[0]
-            atualizar_valor_total(id_manutencao)
-
         con.commit()
         return jsonify({'success': 'Serviço atualizado com sucesso.'}), 200
 
@@ -1009,10 +938,6 @@ def delete_servico(id):
             WHERE ID_SERVICOS = ?
         ''', (id,))
         resultado = cursor.fetchone()
-
-        if resultado:  # Atualiza valor total apenas se houver manutenção
-            id_manutencao = resultado[0]
-            atualizar_valor_total(id_manutencao)
 
         con.commit()
         return jsonify({'success': 'Serviço inativado com sucesso.'}), 200
