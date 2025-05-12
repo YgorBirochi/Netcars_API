@@ -502,7 +502,7 @@ class CustomManutencaoPDF(FPDF):
         self.set_author("Sistema de Concessionária")
         # cores
         self.primary_color = (56, 56, 56)
-        self.accent_color = (220, 50, 50)
+        self.accent_color = (108, 29, 233)
         # fontes e altura de linha
         self.font_norm = 11
         self.font_bold = 12
