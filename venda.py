@@ -36,7 +36,9 @@ def compra_a_vista():
 
         cursor.execute('SELECT 1 FROM VENDA_COMPRA WHERE ID_USUARIO = ? AND STATUS = 1', (id_usuario,))
 
-        if cursor.fetchone():
+        financ_andamento = cursor.fetchone()
+
+        if financ_andamento:
             return jsonify({'error': 'Você já possui um financiamento em andamento.'}), 400
 
         if tipo_veic == 1:

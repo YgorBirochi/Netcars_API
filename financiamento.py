@@ -167,7 +167,6 @@ def financiamento():
         con.rollback()
         return jsonify({'error': str(e)}), 400
 
-
 @app.route('/buscar_financiamento', methods=['GET'])
 def buscar_financiamento():
     token = request.headers.get('Authorization')
@@ -202,7 +201,11 @@ def buscar_financiamento():
             data_financiamento = cursor.fetchall()
 
             if not data_financiamento:
-                return jsonify({'error': 'Nenhnum financiamento encontrado.'}), 400
+                return jsonify({
+                    'total': 0,
+                    'concluidos': 0,
+                    'em_andamento': 0
+                }), 200
 
             lista_ids_financ = [row[0] for row in data_financiamento]
 

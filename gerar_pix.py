@@ -207,7 +207,6 @@ def remover_bearer(token):
     else:
         return token
 
-
 @app.route('/gerar_pix', methods=['POST'])
 def gerar_pix():
     token = request.headers.get('Authorization')

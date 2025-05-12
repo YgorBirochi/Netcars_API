@@ -231,29 +231,29 @@ def get_moto():
             cursor.execute(
                 '''
                 SELECT 1
-                FROM carros
+                FROM MOTOS
                 INNER JOIN venda_compra
-                ON carros.id_carro = venda_compra.id_veiculo
-                AND venda_compra.tipo_veiculo = 1
-                WHERE venda_compra.id_usuario = ? AND carros.ativo = 0
-                AND carros.id_carro = ?
+                ON MOTOS.id_moto = venda_compra.id_veiculo
+                AND venda_compra.tipo_veiculo = 2
+                WHERE venda_compra.id_usuario = ? AND MOTOS.ativo = 0
+                AND motos.id_moto = ?
                 ''', (id_usuario, idFiltro)
             )
         else:
             cursor.execute(
                 '''
                 SELECT 1
-                FROM carros
+                FROM MOTOS
                 INNER JOIN venda_compra
-                ON carros.id_carro = venda_compra.id_veiculo
-                AND venda_compra.tipo_veiculo = 1
-                WHERE carros.ativo = 0 AND carros.id_carro = ?
+                ON MOTOS.id_moto = venda_compra.id_veiculo
+                AND venda_compra.tipo_veiculo = 2
+                WHERE MOTOS.ativo = 0 AND motos.id_moto = ?
                 ''', (idFiltro,)
             )
 
-        carro_vendido = cursor.fetchone()
+        moto_vendida = cursor.fetchone()
 
-        if usuario_reservou or carro_vendido:
+        if usuario_reservou or moto_vendida:
                 cursor.execute(f'{query} WHERE ID_MOTO = ?', (idFiltro,))
 
                 moto = cursor.fetchone()
@@ -300,7 +300,7 @@ def get_moto():
                         "reserva": True,
                         "veiculos": [dados_moto]
                     }), 200
-                elif carro_vendido:
+                elif moto_vendida:
                     return jsonify({
                         "vendido": True,
                         "veiculos": [dados_moto]

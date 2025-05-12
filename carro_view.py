@@ -214,6 +214,7 @@ def get_carro():
     cursor = con.cursor()
 
     token = request.headers.get('Authorization')
+
     if token:
         token = remover_bearer(token)
         payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
