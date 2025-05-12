@@ -1075,16 +1075,227 @@ def criar_pdf_receita_despesa():
         download_name=filename
     )
 
-#
-# # Relatorio de Clientes e Compras
-# @app.route('/relatorio/ClientesCompras', methods=['GET'])
-# def criar_pdf_clientes_compras():
-#
-#
-#
-# # Relatorio de financiamentos e parcelas pagas
-# @app.route('/relatorio/FinanciamentosParcelasPagas', methods=['GET'])
-# def criar_pdf_financiamentos_parcelas_pagas():
-#
-#
-# # Fim das Rotas
+
+class CustomParcelamentoPDF(FPDF):
+    def __init__(self):
+        super().__init__()
+        self.set_title("Relatório de Parcelamentos")
+        self.set_author("Sistema Financeiro")
+
+        # Cores
+        self.primary_color = (33, 37, 41)       # quase preto
+        self.accent_color  = (108, 29, 233)     # roxo vivo para destaques de seções, se quiser
+        self.header_bg     = (108, 29, 233)    # roxo suave para cabeçalho da tabela
+        self.row_alt_bg    = (245, 245, 245)    # cinza suave para linhas alternadas
+
+        # Altura de linha e largura de colunas
+        self.line_h     = 7
+        self.col_widths = [20, 35, 35, 30, 30, 30]
+
+        # Flag para controlar reaparecimento de cabeçalho da tabela
+        self.in_table = False
+
+        # Margem inferior para auto page break
+        self.set_auto_page_break(auto=True, margin=20)
+
+
+    def header(self):
+        if self.in_table:
+            # Só cabeçalho da tabela
+            self._draw_table_header()
+            return
+
+        # Cabeçalho completo (título + data + linha)
+        self.set_font("Arial", "B", 16)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, 12, "Relatório de Parcelamentos", ln=1, align="C")
+
+        self.set_font("Arial", "", 10)
+        self.set_text_color(100, 100, 100)
+        self.cell(0, 6, f"Gerado em {datetime.now():%d/%m/%Y %H:%M}", ln=1, align="C")
+
+        self.ln(2)
+        self.set_draw_color(*self.primary_color)
+        self.set_line_width(0.5)
+        self.line(10, self.get_y(), self.w - 10, self.get_y())
+        self.ln(6)
+
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font("Arial", "I", 8)
+        self.set_text_color(150, 150, 150)
+        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
+
+
+    def _draw_table_header(self):
+        """Desenha o cabeçalho da tabela de parcelas (fundo roxo + texto branco)."""
+        self.set_font("Arial", "B", 10)
+        self.set_fill_color(*self.header_bg)
+        self.set_text_color(255, 255, 255)
+        headers = ["Parcela","Vencimento","Pagamento","Valor (R$)","Amortização","Status"]
+        aligns  = ["C","C","C","R","R","C"]
+        for w, h, a in zip(self.col_widths, headers, aligns):
+            self.cell(w, self.line_h, h, border=1, align=a, fill=True)
+        self.ln(self.line_h)
+        # retorna cor de texto para dados
+        self.set_text_color(*self.primary_color)
+
+
+    def add_parcelamento(self, dados):
+        self.add_page()
+        self.alias_nb_pages()
+
+        # === Dados do Cliente ===
+        self.set_font("Arial", "B", 12)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, self.line_h, "Dados do Cliente", ln=1)
+
+        self.set_font("Arial", "", 10)
+        cli = dados['cliente']
+        self.cell(0, self.line_h, f"Nome: {cli['nome']}", ln=1)
+        self.cell(0, self.line_h, f"CPF/CNPJ: {format_cpf_cnpj(cli['cpf_cnpj'])}", ln=1)
+        self.cell(0, self.line_h, f"Telefone: {format_phone(cli['telefone'])}", ln=1)
+        self.ln(6)
+
+        # === Dados do Veículo e Financiamento ===
+        self.set_font("Arial", "B", 12)
+        self.cell(0, self.line_h, "Veículo e Financiamento", ln=1)
+
+        self.set_font("Arial", "", 10)
+        v = dados['veiculo']
+        self.cell(0, self.line_h, f"{v['marca']} {v['modelo']}", ln=1)
+        self.cell(0, self.line_h, f"Placa: {v['placa']}", ln=1)
+        self.ln(3)
+
+        # Total, Entrada e Qtd Parcelas em PRETO NEGRITO
+        self.set_font("Arial", "B", 10)
+        self.set_text_color(*self.primary_color)
+        self.cell(0, self.line_h, f"Total: {format_currency(dados['total'])}", ln=1)
+        self.cell(0, self.line_h, f"Entrada: {format_currency(dados['entrada'])}", ln=1)
+        self.cell(0, self.line_h, f"Parcelas: {dados['qnt_parcelas']}x", ln=1)
+        self.ln(8)
+
+        # === Tabela de Parcelas ===
+        self.in_table = True
+        self._draw_table_header()
+
+        status_map = {1: "Pendente", 2: "Vencida", 3: "Paga", 4: "Amortizada"}
+        self.set_font("Arial", "", 9)
+        for i, p in enumerate(dados['parcelas']):
+            fill = (i % 2 == 0)
+            if fill:
+                self.set_fill_color(*self.row_alt_bg)
+            vals = [
+                str(p['num']),
+                format_date(p['venc']),
+                format_date(p['pag']) if p['pag'] else "-",
+                format_currency(p['valor']),
+                format_currency(p['amort']),
+                status_map.get(p['status'], str(p['status']))
+            ]
+            for w, txt, a in zip(self.col_widths, vals, ["C","C","C","R","R","C"]):
+                self.cell(w, self.line_h, txt, border=1, align=a, fill=fill)
+            self.ln(self.line_h)
+        self.in_table = False
+        self.ln(4)
+
+# --- Nova rota em seu Flask app ---
+
+@app.route('/relatorio/parcelamentos', methods=['GET'])
+def criar_pdf_parcelamentos():
+    q = request.args.get('q', '').strip()
+    cursor = con.cursor()
+
+    # SQL base com JOINs e COALESCE para uniformizar marca/modelo/placa
+    base_sql = """
+    SELECT
+      f.ID_FINANCIAMENTO,
+      f.ENTRADA,
+      f.QNT_PARCELAS,
+      f.TIPO_VEICULO,
+      f.VALOR_TOTAL,
+      u.NOME_COMPLETO,
+      u.CPF_CNPJ,
+      u.TELEFONE,
+      COALESCE(c.MARCA, m.MARCA)   AS MARCA,
+      COALESCE(c.MODELO, m.MODELO) AS MODELO,
+      COALESCE(c.PLACA, m.PLACA)   AS PLACA
+    FROM FINANCIAMENTO f
+    JOIN USUARIO u ON u.ID_USUARIO = f.ID_USUARIO
+    LEFT JOIN CARROS c 
+      ON f.TIPO_VEICULO = 1 
+     AND f.ID_VEICULO   = c.ID_CARRO
+    LEFT JOIN MOTOS m 
+      ON f.TIPO_VEICULO = 2 
+     AND f.ID_VEICULO   = m.ID_MOTO
+    """
+
+    params = []
+    if q:
+        base_sql += """
+        WHERE
+          u.NOME_COMPLETO              CONTAINING ?
+        OR COALESCE(c.MARCA, m.MARCA)     CONTAINING ?
+        OR COALESCE(c.MODELO, m.MODELO)   CONTAINING ?
+        OR COALESCE(c.PLACA, m.PLACA)     CONTAINING ?
+        """
+        # Passa apenas 'byd', sem % e sem upper()
+        params.extend([q] * 4)
+
+    base_sql += " ORDER BY u.NOME_COMPLETO, f.ID_FINANCIAMENTO"
+
+    cursor.execute(base_sql, params)
+    fin_list = cursor.fetchall()
+
+    if not fin_list:
+        return jsonify({'error': 'Nenhum parcelamento encontrado.'}), 400
+
+    pdf = CustomParcelamentoPDF()
+    for (id_fin, entrada, qnt, tp, total,
+         nome, cpf, tel, marca, modelo, placa) in fin_list:
+
+        # Busca as parcelas desse financiamento
+        cursor.execute("""
+            SELECT NUM_PARCELA, DATA_VENCIMENTO, DATA_PAGAMENTO,
+                   VALOR_PARCELA, VALOR_PARCELA_AMORTIZADA, STATUS
+            FROM FINANCIAMENTO_PARCELA
+            WHERE ID_FINANCIAMENTO = ?
+              ORDER BY NUM_PARCELA
+        """, (id_fin,))
+        parcelas = [{
+            'num':    row[0],
+            'venc':   row[1],
+            'pag':    row[2],
+            'valor':  float(row[3]),
+            'amort':  float(row[4]),
+            'status': row[5]
+        } for row in cursor.fetchall()]
+
+        dados = {
+            'cliente': {
+                'nome': nome,
+                'cpf_cnpj': cpf,
+                'telefone': tel
+            },
+            'veiculo': {
+                'marca': marca or "-",
+                'modelo': modelo or "-",
+                'placa': placa or "-"
+            },
+            'entrada':      float(entrada),
+            'total':        float(total),
+            'qnt_parcelas': qnt,
+            'parcelas':     parcelas
+        }
+        pdf.add_parcelamento(dados)
+
+    cursor.close()
+    filename = f"relatorio_parcelamentos_{datetime.now():%Y%m%d}.pdf"
+    pdf.output(filename)
+    return send_file(
+        filename,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=filename
+    )

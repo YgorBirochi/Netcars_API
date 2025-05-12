@@ -202,7 +202,11 @@ def buscar_financiamento():
             data_financiamento = cursor.fetchall()
 
             if not data_financiamento:
-                return jsonify({'error': 'Nenhnum financiamento encontrado.'}), 400
+                return jsonify({
+                    'total': 0,
+                    'concluidos': 0,
+                    'em_andamento': 0
+                }), 200
 
             lista_ids_financ = [row[0] for row in data_financiamento]
 
@@ -478,3 +482,4 @@ def pagar_parcela(id_parcela, amortizada):
         return jsonify({'error': str(e)}), 400
     finally:
         cursor.close()
+
