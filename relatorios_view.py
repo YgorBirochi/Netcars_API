@@ -1141,51 +1141,64 @@ class CustomParcelamentoPDF(FPDF):
         # retorna cor de texto para dados
         self.set_text_color(*self.primary_color)
 
-
     def add_parcelamento(self, dados):
+        # Inicie nova página / reset de contexto
         self.add_page()
         self.alias_nb_pages()
 
-        # === Dados do Cliente ===
+        # ——————————————————————————————————————————————
+        # 1) Seção de 3 colunas: Cliente | Veículo | Financiamento
+        usable_width = self.w - 20
+        col_w = usable_width / 3
+
+        # Títulos das colunas
         self.set_font("Arial", "B", 12)
         self.set_text_color(*self.primary_color)
-        self.cell(0, self.line_h, "Dados do Cliente", ln=1)
+        self.cell(col_w, self.line_h, "Dados do Cliente", ln=0)
+        self.cell(col_w, self.line_h, "Veículo", ln=0)
+        self.cell(col_w, self.line_h, "Financiamento", ln=1)
 
+        # Conteúdo das colunas
         self.set_font("Arial", "", 10)
+        self.set_text_color(33, 37, 41)
         cli = dados['cliente']
-        self.cell(0, self.line_h, f"Nome: {cli['nome']}", ln=1)
-        self.cell(0, self.line_h, f"CPF/CNPJ: {format_cpf_cnpj(cli['cpf_cnpj'])}", ln=1)
-        self.cell(0, self.line_h, f"Telefone: {format_phone(cli['telefone'])}", ln=1)
-        self.ln(6)
-
-        # === Dados do Veículo e Financiamento ===
-        self.set_font("Arial", "B", 12)
-        self.cell(0, self.line_h, "Veículo e Financiamento", ln=1)
-
-        self.set_font("Arial", "", 10)
         v = dados['veiculo']
-        self.cell(0, self.line_h, f"{v['marca']} {v['modelo']}", ln=1)
-        self.cell(0, self.line_h, f"Placa: {v['placa']}", ln=1)
-        self.ln(3)
+        total = format_currency(dados['total'])
+        entrada = format_currency(dados['entrada'])
+        qtd = f"{dados['qnt_parcelas']}x"
 
-        # Total, Entrada e Qtd Parcelas em PRETO NEGRITO
-        self.set_font("Arial", "B", 10)
-        self.set_text_color(*self.primary_color)
-        self.cell(0, self.line_h, f"Total: {format_currency(dados['total'])}", ln=1)
-        self.cell(0, self.line_h, f"Entrada: {format_currency(dados['entrada'])}", ln=1)
-        self.cell(0, self.line_h, f"Parcelas: {dados['qnt_parcelas']}x", ln=1)
+        # 1ª linha
+        self.cell(col_w, self.line_h, f"Nome: {cli['nome']}", ln=0)
+        self.cell(col_w, self.line_h, f"{v['marca']} {v['modelo']}", ln=0)
+        self.cell(col_w, self.line_h, f"Total: {total}", ln=1)
+
+        # 2ª linha
+        self.cell(col_w, self.line_h, f"CPF/CNPJ: {format_cpf_cnpj(cli['cpf_cnpj'])}", ln=0)
+        self.cell(col_w, self.line_h, f"Placa: {v['placa']}", ln=0)
+        self.cell(col_w, self.line_h, f"Entrada: {entrada}", ln=1)
+
+        # 3ª linha
+        self.cell(col_w, self.line_h, f"Telefone: {format_phone(cli['telefone'])}", ln=0)
+        self.cell(col_w, self.line_h, f"Ano: {v['ano_modelo']}/{v['ano_fabricacao']}", ln=0)
+        self.cell(col_w, self.line_h, f"Parcelas: {qtd}", ln=1)
+
         self.ln(8)
 
-        # === Tabela de Parcelas ===
+        # ——————————————————————————————————————————————
+        # 2) Tabela de Parcelas
         self.in_table = True
         self._draw_table_header()
 
         status_map = {1: "Pendente", 2: "Vencida", 3: "Paga", 4: "Amortizada"}
         self.set_font("Arial", "", 9)
+
         for i, p in enumerate(dados['parcelas']):
+            # Em cada nova linha, verifica se entrou em nova página:
+            # se o y ultrapassar o limite, o header() vai redesenhar só o cabeçalho da tabela.
             fill = (i % 2 == 0)
             if fill:
                 self.set_fill_color(*self.row_alt_bg)
+
             vals = [
                 str(p['num']),
                 format_date(p['venc']),
@@ -1194,11 +1207,15 @@ class CustomParcelamentoPDF(FPDF):
                 format_currency(p['amort']),
                 status_map.get(p['status'], str(p['status']))
             ]
-            for w, txt, a in zip(self.col_widths, vals, ["C","C","C","R","R","C"]):
-                self.cell(w, self.line_h, txt, border=1, align=a, fill=fill)
+
+            for w, txt, align in zip(self.col_widths, vals, ["C", "C", "C", "R", "R", "C"]):
+                self.cell(w, self.line_h, txt, border=1, align=align, fill=fill)
             self.ln(self.line_h)
+
+        # Finaliza a tabela antes do próximo parcelamento
         self.in_table = False
-        self.ln(4)
+        self.ln(6)
+
 
 # --- Nova rota em seu Flask app ---
 
@@ -1220,7 +1237,9 @@ def criar_pdf_parcelamentos():
       u.TELEFONE,
       COALESCE(c.MARCA, m.MARCA)   AS MARCA,
       COALESCE(c.MODELO, m.MODELO) AS MODELO,
-      COALESCE(c.PLACA, m.PLACA)   AS PLACA
+      COALESCE(c.PLACA, m.PLACA)   AS PLACA,
+      COALESCE(c.ANO_MODELO, m.ANO_MODELO) AS ANO_MODELO,
+      COALESCE(c.ANO_FABRICACAO, m.ANO_FABRICACAO) AS ANO_FABRICACAO
     FROM FINANCIAMENTO f
     JOIN USUARIO u ON u.ID_USUARIO = f.ID_USUARIO
     LEFT JOIN CARROS c 
@@ -1253,7 +1272,7 @@ def criar_pdf_parcelamentos():
 
     pdf = CustomParcelamentoPDF()
     for (id_fin, entrada, qnt, tp, total,
-         nome, cpf, tel, marca, modelo, placa) in fin_list:
+         nome, cpf, tel, marca, modelo, placa, ano_modelo, ano_fabricacao) in fin_list:
 
         # Busca as parcelas desse financiamento
         cursor.execute("""
@@ -1281,7 +1300,9 @@ def criar_pdf_parcelamentos():
             'veiculo': {
                 'marca': marca or "-",
                 'modelo': modelo or "-",
-                'placa': placa or "-"
+                'placa': placa or "-",
+                'ano_modelo': ano_modelo or "-",
+                "ano_fabricacao": ano_fabricacao or "-"
             },
             'entrada':      float(entrada),
             'total':        float(total),
