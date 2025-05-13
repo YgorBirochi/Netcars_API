@@ -36,7 +36,9 @@ def calcular_financiamento(id_veic, tipo_veic, qnt_parcelas, entrada):
         return jsonify({
             'qnt_parcelas': 0,
             'entrada': entrada,
-            'preco_venda': preco_venda
+            'preco_venda': preco_venda,
+            'valor_total': preco_venda,
+            'lista_parcelas': {}
         }), 200
 
     preco_sem_entrada = preco_venda - entrada
