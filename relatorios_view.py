@@ -21,7 +21,6 @@ def format_currency(value):
 def format_kilometragem(value):
     return f"{value:,} km".replace(",", ".")
 
-
 def format_phone(phone):
     if phone is None:
         return None
@@ -154,7 +153,6 @@ class CustomCarroPDF(FPDF):
             f"Total de carros: {total_carros}",
             ln=True, align="C"
         )
-
 
     def _draw_card(self, data, start_y):
         """Desenha um card na posição vertical 'start_y'."""
@@ -494,7 +492,6 @@ class CustomUsuarioPDF(FPDF):
 
         return "..."
 
-# Classe personalizada para gerar o PDF de Manutenções
 class CustomManutencaoPDF(FPDF):
     def __init__(self):
         super().__init__()
@@ -682,9 +679,19 @@ class CustomReceitaDespesaPDF(FPDF):
 
             # Células da linha
             # Data (centralizado)
+            self.set_text_color(*self.primary_color)
             self.cell(self.col_widths[0], self.line_height, data_str, 1, 0, 'C')
-            # Tipo (centralizado)
+
+            # Tipo (centralizado, colorido)
+            if tipo_str.lower() == 'receita':
+                self.set_text_color(0, 150, 0)  # verde
+            else:
+                self.set_text_color(200, 0, 0)  # vermelho
             self.cell(self.col_widths[1], self.line_height, tipo_str, 1, 0, 'C')
+
+            # Restaurar cor padrão para as próximas células
+            self.set_text_color(*self.primary_color)
+
             # Descrição (esquerda, truncada)
             desc_w = self.col_widths[2]
             text = descricao
@@ -693,6 +700,7 @@ class CustomReceitaDespesaPDF(FPDF):
                     text = text[:-1]
                 text += '...'
             self.cell(desc_w, self.line_height, text, 1, 0, 'L')
+
             # Valor (direita)
             valor_str = f"{valor_num:,.2f}"
             self.cell(self.col_widths[3], self.line_height, valor_str, 1, 0, 'R')
@@ -842,7 +850,6 @@ class CustomParcelamentoPDF(FPDF):
         self.in_table = False
         self.ln(6)
 
-
 class CustomClientesComprasPDF(FPDF):
     def __init__(self):
         super().__init__()
@@ -971,7 +978,6 @@ class CustomClientesComprasPDF(FPDF):
             if self.get_string_width(truncated) <= max_width:
                 return truncated
         return "..."
-
 
 # Fim das Classes
 
