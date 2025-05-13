@@ -436,8 +436,9 @@ def gerar_qrcode_parcela_atual(tipo):
     response.headers['ID-PARCELA'] = str(id_parcela)
     response.headers['VALOR-PARCELA'] = str(valor_parcela)
     response.headers['JUROS'] = str(juros)
+    response.headers['CODIGO-PIX'] = str(payload)
 
-    response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA, VALOR-PARCELA, JUROS'
+    response.headers['Access-Control-Expose-Headers'] = 'ID-PARCELA, VALOR-PARCELA, JUROS, CODIGO-PIX'
 
     return response
 
