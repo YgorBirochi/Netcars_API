@@ -572,7 +572,7 @@ class CustomManutencaoPDF(FPDF):
     def _draw_services_table(self, servicos):
         # Cabeçalho da tabela
         self.set_font("Arial", "B", self.font_bold)
-        self.set_fill_color(*self.accent_color)
+        self.set_fill_color(230, 215, 245)
         # Colunas: descrição (60%), unitário (13%), quantidade (13%), total (14%)
         tbl_w = self.w - 20
         w_desc = tbl_w * 0.6
@@ -580,7 +580,7 @@ class CustomManutencaoPDF(FPDF):
         w_qtd = tbl_w * 0.13
         w_total = tbl_w * 0.14
         y_start = self.get_y()
-        self.set_text_color(255,255,255)
+        self.set_text_color(40,40,40)
         self.cell(w_desc, self.line_h, "Descrição", border=1, fill=True)
         self.cell(w_unit, self.line_h, "Vr Unit.", border=1, fill=True)
         self.cell(w_qtd, self.line_h, "Qtd.", border=1, fill=True)
@@ -722,7 +722,7 @@ class CustomParcelamentoPDF(FPDF):
         # Cores
         self.primary_color = (33, 37, 41)  # quase preto
         self.accent_color = (108, 29, 233)  # roxo vivo para destaques de seções, se quiser
-        self.header_bg = (108, 29, 233)  # roxo suave para cabeçalho da tabela
+        self.header_bg = (230, 215, 245)  # roxo suave para cabeçalho da tabela
         self.row_alt_bg = (245, 245, 245)  # cinza suave para linhas alternadas
 
         # Altura de linha e largura de colunas
@@ -766,7 +766,7 @@ class CustomParcelamentoPDF(FPDF):
         """Desenha o cabeçalho da tabela de parcelas (fundo roxo + texto branco)."""
         self.set_font("Arial", "B", 10)
         self.set_fill_color(*self.header_bg)
-        self.set_text_color(255, 255, 255)
+        self.set_text_color(40, 40, 40)
         headers = ["Parcela", "Vencimento", "Pagamento", "Valor (R$)", "Amortização", "Status"]
         aligns = ["C", "C", "C", "R", "R", "C"]
         for w, h, a in zip(self.col_widths, headers, aligns):
@@ -855,129 +855,219 @@ class CustomClientesComprasPDF(FPDF):
         super().__init__()
         self.set_title("Relatório de Clientes e Compras")
         self.set_author("Sistema de Relatórios")
+        # cores semelhantes ao PDF de manutenção
         self.primary_color = (56, 56, 56)
-        self.accent_color = (40, 120, 220)
-
-        self.card_height = 70
-        self.card_margin_x = 10
-        self.card_width = 90
-        self.card_spacing_x = 10
-        self.card_spacing_y = 10
-        self.line_height = 5
-        self.normal_font_size = 9
-        self.bold_font_size = 9
+        self.accent_color = (230, 213, 245)
+        self.accent_background = (230, 215, 245)
+        # fontes e alturas
+        self.font_norm = 11
+        self.font_bold = 12
+        self.line_h = 6
 
     def header(self):
         self.set_font("Arial", "B", 14)
         self.set_text_color(*self.primary_color)
-        self.cell(0, 10, "Relatório de Clientes e Compras", 0, 1, "C")
-
-        self.set_font("Arial", "", 10)
-        self.cell(0, 6, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, "C")
-
-        self.ln(2)
+        self.cell(0, 10, "Relatório de Clientes e Compras", ln=1, align='C')
         self.set_line_width(0.5)
         self.set_draw_color(*self.primary_color)
-        self.line(10, self.get_y() + 2, self.w - 10, self.get_y() + 2)
-        self.ln(8)
+        self.line(10, self.get_y(), self.w - 10, self.get_y())
+        self.ln(4)
 
     def footer(self):
         self.set_y(-15)
-        self.set_font("Arial", "I", 10)
+        self.set_font("Arial", "I", 8)
         self.set_text_color(150, 150, 150)
-        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
+        self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", align='C')
 
     def create_clientes_compras_list(self, clientes):
         self.alias_nb_pages()
-        total_compras = 0
+        total_veiculos = 0
+        soma_total = 0
 
         if not clientes:
             self.add_page()
-            self.ln(10)
             self.set_font("Arial", "", 12)
-            self.cell(0, 10, "Nenhum cliente com compra encontrado.", ln=True, align="C")
-            self.ln(8)
-            self.set_font("Arial", "B", 14)
-            self.cell(0, 10, "Total de registros: 0", ln=True, align="C")
+            self.cell(0, 10, "Nenhum cliente com compra encontrado.", ln=True, align='C')
             return
 
-        for cliente_id, dados in clientes.items():
-            compras = dados['compras']
-            total_compras += len(compras)
+        for dados in clientes.values():
+            compras = dados.get('compras', [])
+            total_veiculos += len(compras)
+            soma_total += sum(c.get('valor_total', 0) for c in compras)
 
             self.add_page()
-            self.set_font("Arial", "B", 12)
-            self.cell(0, 10, f"Cliente: {dados['nome']} - CPF/CNPJ: {format_cpf_cnpj(dados['cpf_cnpj'])}", ln=True)
-            self.set_font("Arial", "", 11)
-            self.cell(0, 8, f"Email: {dados['email']} | Telefone: {format_phone(dados['telefone'])}", ln=True)
-            self.cell(0, 8, f"Nascimento: {format_date(dados['nascimento'])}", ln=True)
-            self.ln(5)
+            self._draw_cliente_header(dados)
+            self.ln(4)
+            self._draw_compras_section(compras)
 
-            # Reset grid control
-            self.current_page_y = self.get_y()
-            for i, compra in enumerate(compras):
-                if i != 0 and i % 8 == 0:
-                    self.add_page()
-                    self.current_page_y = 35
+        # total geral ao final
+        self.set_y(-20)
+        self.set_font("Arial", "B", 12)
+        texto = f"Quantidade de compras: {total_veiculos}"
+        texto2 = f"Valor total em compras: {format_currency(soma_total)}"
+        self.cell(0, 10, texto, 0, 1, 'C')  # '1' aqui cria a quebra de linha
+        self.cell(0, 10, texto2, 0, 0, 'C')
 
-                row = (i % 8) // 2
-                col = (i % 2)
+    def _draw_cliente_header(self, dados):
+        x0, y0 = 10, self.get_y()
+        box_w = self.w - 20
 
-                card_x = self.card_margin_x + col * (self.card_width + self.card_spacing_x)
-                card_y = self.current_page_y + row * (self.card_height + self.card_spacing_y)
+        # Parâmetros de espaçamento
+        gap_entre_linhas = 2
+        padding_superior = 2
+        padding_inferior = 2
+        linha_altura = self.line_h
+        num_linhas = 2
 
-                self._draw_card(compra, card_x, card_y)
+        # Calcula altura do box
+        box_h = padding_superior + num_linhas * linha_altura + gap_entre_linhas + padding_inferior
+        col_w = box_w / 3
 
-            self.ln(10)  # Espaço entre clientes
+        # Desenha o retângulo
+        self.set_draw_color(*self.primary_color)
+        self.rect(x0, y0, box_w, box_h)
 
-        self.set_y(-30)
-        self.set_font("Arial", "B", 14)
-        self.cell(0, 10, f"Total de compras: {total_compras}", ln=True, align="C")
+        # ─── Linha 1: Nome (maior e em negrito) │ Email (normal) │ CPF ───
+        y_linha1 = y0 + padding_superior
 
-    def _draw_card(self, data, x, y):
-        self.set_fill_color(245, 245, 245)
-        self.rect(x, y, self.card_width, self.card_height, "F")
+        # Nome: Arial B, tamanho aumentado (+2)
+        self.set_xy(x0 + 2, y_linha1)
+        self.set_font("Arial", "B", self.font_bold + 2)
+        self.set_text_color(*self.primary_color)
+        self.cell(col_w, linha_altura + 1, dados['nome'], border=0)
 
-        self.set_xy(x + 5, y + 5)
-        self.set_font("Arial", "B", 10)
+        # Email: Arial normal, tamanho padrão
+        self.set_xy(x0 + col_w + 2, y_linha1)
+        self.set_font("Arial", "", self.font_norm)  # sem negrito
+        self.cell(col_w, linha_altura + 1, dados['email'], border=0)
+
+        # CPF/CNPJ
+        self.set_xy(x0 + 2 * col_w + 2, y_linha1)
+        self.set_font("Arial", "", self.font_norm)
+        self.cell(col_w, linha_altura + 1,
+                  f"CPF/CNPJ: {format_cpf_cnpj(dados['cpf_cnpj'])}",
+                  border=0)
+
+        # ─── Linha 2: Telefone │ Nascimento │ Cliente desde ───
+        y_linha2 = y_linha1 + linha_altura + gap_entre_linhas + 1
+        self.set_xy(x0 + 2, y_linha2)
+        self.set_font("Arial", "", self.font_norm)
+        self.set_text_color(*self.primary_color)
+        self.cell(col_w, linha_altura, f"Telefone: {format_phone(dados['telefone'])}", border=0)
+        self.set_xy(x0 + col_w + 2, y_linha2)
+        self.cell(col_w, linha_altura, f"Nascimento: {format_date(dados['nascimento'])}", border=0)
+        self.set_xy(x0 + 2 * col_w + 2, y_linha2)
+        self.cell(col_w, linha_altura, f"Cliente desde: {format_date(dados['cliente_desde'])}", border=0)
+
+        # Posiciona o cursor abaixo do box
+        self.set_y(y0 + box_h + padding_inferior)
+
+    def _draw_compras_section(self, compras):
+        if not compras:
+            return
+
+        self.set_font("Arial", "B", self.font_bold)
+        self.set_text_color(40, 40, 40)
+        self.cell(0, self.line_h, "Compras", ln=1, align='C')
+        self.ln(4)
         self.set_text_color(*self.primary_color)
 
-        # Cabeçalho do cartão: veículo
-        veiculo = f"{data['marca']} {data['modelo']} {data['ano_modelo']}/{data['ano_fabricacao']}"
-        veiculo = self._truncate_text(veiculo, self.card_width - 10, "Arial", "B", 10)
-        self.cell(self.card_width - 10, 6, veiculo, ln=1)
+        col_w = (self.w - 20) / 3
+        x0 = 10
 
-        y_pos = y + 14
-        fields = [
-            ("Cor", data.get("cor", "")),
-            ("Placa", data.get("placa", "")),
-            ("Tipo", data.get("tipo_veiculo", "")),
-            ("Venda", format_date(data['data_venda']) if data.get("data_venda") else ""),
-            ("Valor", format_currency(data['valor_total']) if data.get("valor_total") else ""),
-            ("Forma de Pagamento", data.get("forma_pagamento", "")),
-            ("Valor de Entrada", format_currency(data.get('entrada', 0)) if data.get('entrada') else "N/A"),
-            ("Valor em Aberto", format_currency(data.get('valor_fin_aberto', 0)) if data.get('valor_fin_aberto') else "N/A"),
-            ("Valor Pago", format_currency(data.get('valor_fin_pago', 0)) if data.get('valor_fin_pago') else "N/A"),
-        ]
+        total_valor = 0
+        num_veiculos = len(compras)
 
-        for label, value in fields:
-            self.set_xy(x + 5, y_pos)
-            self.set_font("Arial", "", 9)
-            self.cell(40, self.line_height, f"{label}:", 0, 0)
-            self.set_xy(x + 45, y_pos)
-            self.set_font("Arial", "B", 9)
-            self.cell(self.card_width - 50, self.line_height, str(value), 0, 0)
-            y_pos += self.line_height + 1
+        for idx, compra in enumerate(compras):
+            # ─ Mini-cabeçalho Linha 1 ─
+            self.set_xy(x0, self.get_y())
+            self.set_fill_color(*self.accent_background)
+            self.set_text_color(40, 40, 40)
+            self.set_font("Arial", "B", self.font_bold)
+            for label in ("Tipo Veículo", "Veículo", "Data Venda"):
+                self.cell(col_w, self.line_h, label, border=1, fill=True, align='C')
+            self.ln(self.line_h)
 
-    def _truncate_text(self, text, max_width, font_family, font_style, font_size):
-        self.set_font(font_family, font_style, font_size)
-        if self.get_string_width(text) <= max_width:
-            return text
-        for i in range(len(text), 0, -1):
-            truncated = text[:i] + "..."
-            if self.get_string_width(truncated) <= max_width:
-                return truncated
-        return "..."
+            # Dados Linha 1
+            self.set_x(x0)
+            self.set_font("Arial", "", self.font_norm)
+            self.set_text_color(*self.primary_color)
+            self.cell(col_w, self.line_h, str(compra.get('tipo_veiculo', '')), border=1, align='C')
+            veic = f"{compra.get('marca', '')} {compra.get('modelo', '')} {compra.get('ano_modelo', '')}".strip()
+            self.cell(col_w, self.line_h, veic, border=1, align='C')
+            data_fmt = format_date(compra.get('data_venda')) if compra.get('data_venda') else ''
+            self.cell(col_w, self.line_h, data_fmt, border=1, align='C')
+            self.ln(self.line_h)
+
+            # ─ Mini-cabeçalho Linha 2 ─
+            self.set_x(x0)
+            self.set_fill_color(*self.accent_background)
+            self.set_text_color(40, 40, 40)
+            self.set_font("Arial", "B", self.font_bold)
+            for label in ("Placa", "Cor", "Forma Pagamento"):
+                self.cell(col_w, self.line_h, label, border=1, fill=True, align='C')
+            self.ln(self.line_h)
+
+            # Dados Linha 2
+            self.set_x(x0)
+            self.set_font("Arial", "", self.font_norm)
+            self.set_text_color(*self.primary_color)
+            self.cell(col_w, self.line_h, str(compra.get('placa', '')), border=1, align='C')
+            self.cell(col_w, self.line_h, str(compra.get('cor', '')), border=1, align='C')
+            self.cell(col_w, self.line_h, str(compra.get('forma_pagamento', '')), border=1, align='C')
+            self.ln(self.line_h)
+
+            # ─ Mini-cabeçalho Linha 3 ─
+            self.set_x(x0)
+            self.set_fill_color(*self.accent_background)
+            self.set_text_color(40, 40, 40)
+            self.set_font("Arial", "B", self.font_bold)
+            for label in ("Valor Entrada", "Valor Em Aberto", "Valor Pago"):
+                self.cell(col_w, self.line_h, label, border=1, fill=True, align='C')
+            self.ln(self.line_h)
+
+            # Dados Linha 3
+            self.set_x(x0)
+            self.set_font("Arial", "", self.font_norm)
+            self.set_text_color(*self.primary_color)
+            entrada = compra.get('entrada', 0)
+            aberto = compra.get('valor_fin_aberto', 0)
+            pago = compra.get('valor_fin_pago', 0)
+            valor_total_veiculo = compra.get('valor_total', 0)
+            total_valor += valor_total_veiculo
+            self.cell(col_w, self.line_h, format_currency(entrada), border=1, align='C')
+            self.cell(col_w, self.line_h, format_currency(aberto), border=1, align='C')
+            self.cell(col_w, self.line_h, format_currency(pago), border=1, align='C')
+            self.ln(self.line_h + 2)
+
+            self.ln(10)
+
+            # ─ Totalizador ao final da última tabela ─
+            if idx == num_veiculos - 1:
+                self.set_font("Arial", "B", self.font_bold)
+                self.set_text_color(*self.primary_color)
+                plural = "veículo" if num_veiculos == 1 else "veículos"
+
+                # Linha 1: Quantidade de veículos
+                self.cell(
+                    0,
+                    self.line_h,
+                    f"Quantidade de veículos: {num_veiculos}",
+                    ln=1,
+                    align='R'
+                )
+
+                # Linha 2: Valor total
+                self.cell(
+                    0,
+                    self.line_h,
+                    f"Valor total em compras: {format_currency(total_valor)}",
+                    ln=1,
+                    align='R'
+                )
+
+                self.ln(5)
+
 
 # Fim das Classes
 
@@ -1330,12 +1420,11 @@ def criar_pdf_clientes_compras():
 	SELECT PR_BUSCA_CLIENTE_COMPRA.ID_VENDA_COMPRA,
 	PR_BUSCA_CLIENTE_COMPRA.DATA_VENDA_COMPRA,
 	PR_BUSCA_CLIENTE_COMPRA.VALOR_TOTAL,
-	PR_BUSCA_CLIENTE_COMPRA.ID_VEICULO,
 	CASE 
     WHEN PR_BUSCA_CLIENTE_COMPRA.TIPO_VEICULO = 1 THEN 'Carro'
     WHEN PR_BUSCA_CLIENTE_COMPRA.TIPO_VEICULO = 2 THEN 'Moto'
     ELSE 'Desconhecido'
-    END AS TIPO_VEICULO,
+	END AS TIPO_VEICULO,
 	PR_BUSCA_CLIENTE_COMPRA.ID_USUARIO,
 	PR_BUSCA_CLIENTE_COMPRA.MARCA,
 	PR_BUSCA_CLIENTE_COMPRA.MODELO,
@@ -1348,6 +1437,7 @@ def criar_pdf_clientes_compras():
 	PR_BUSCA_CLIENTE_COMPRA.EMAIL,
 	PR_BUSCA_CLIENTE_COMPRA.TELEFONE,
 	PR_BUSCA_CLIENTE_COMPRA.CPF_CNPJ,
+	PR_BUSCA_CLIENTE_COMPRA.DATA_CADASTRO,
 	round(PR_BUSCA_CLIENTE_COMPRA.valor_fin_aberto,2) AS valor_fin_aberto,
     round(PR_BUSCA_CLIENTE_COMPRA.valor_fin_pago,2) AS valor_fin_pago,
     round(PR_BUSCA_CLIENTE_COMPRA.ENTRADA,2) AS ENTRADA,
@@ -1375,9 +1465,15 @@ def criar_pdf_clientes_compras():
 
     # Estruturar os dados agrupados por cliente
     clientes = {}
-    for (id_venda, data_venda, valor_total, id_veiculo, tipo_veiculo, id_usuario, marca, modelo,
-         ano_modelo, ano_fabricacao, cor, placa, nome, nascimento, email, telefone, cpf_cnpj,
-         valor_fin_aberto, valor_fin_pago, entrada, forma_pagamento) in rows:
+    for (
+            id_venda, data_venda, valor_total,
+            tipo_veiculo, id_usuario,
+            marca, modelo, ano_modelo, ano_fabricacao,
+            cor, placa, nome, nascimento, email, telefone,
+            cpf_cnpj, data_cadastro,
+            valor_fin_aberto, valor_fin_pago, entrada,
+            forma_pagamento
+    ) in rows:
 
         if id_usuario not in clientes:
             clientes[id_usuario] = {
@@ -1386,6 +1482,7 @@ def criar_pdf_clientes_compras():
                 'email': email,
                 'telefone': telefone,
                 'cpf_cnpj': cpf_cnpj,
+                'cliente_desde': data_cadastro,
                 'compras': []
             }
 
