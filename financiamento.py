@@ -161,6 +161,46 @@ def financiamento():
         else:
             cursor.execute('UPDATE MOTOS SET ATIVO = 0 WHERE ID_MOTO = ?', (id_veic,))
 
+        # Dados da empresa
+        cursor.execute("SELECT RAZAO_SOCIAL, CHAVE_PIX, CIDADE FROM CONFIG_GARAGEM")
+        empresa = cursor.fetchone()
+
+        # Dados do usuário
+        cursor.execute("SELECT nome_completo, email, cpf_cnpj, telefone FROM usuario WHERE id_usuario = ?",
+                       (id_usuario,))
+        usuario = cursor.fetchone()
+        cursor.close()
+
+        if not empresa or not usuario:
+            return jsonify({'error': 'Erro ao buscar dados da empresa ou usuário.'}), 500
+
+        nome_empresa, chave_pix, cidade = empresa
+        nome_usuario, email_usuario, cpf_usuario, telefone_usuario = usuario
+
+        payload_pix, link_qrcode, nome_arquivo = gerar_pix_funcao(nome_empresa, entrada, chave_pix, cidade)
+        data_envio = datetime.now()
+        data_limite = data_envio + timedelta(days=1)
+        data_limite_str = data_limite.strftime("%d/%m/%Y")
+
+        context = {
+            'nome_usuario': nome_usuario,
+            'email_destinatario': email_usuario,
+            'dados_user': {
+                'nome': nome_usuario,
+                'email': email_usuario,
+                'cpf': cpf_usuario,
+                'telefone': telefone_usuario,
+                'qrcode_url': link_qrcode,
+                'valor': f"{entrada:.2f}"
+            },
+            'payload_completo': payload_pix,
+            'data_limite_str': data_limite_str,
+            'endereco_concessionaria': "Av. Exemplo, 1234 - Centro, Cidade Fictícia",
+            'ano': datetime.now().year
+        }
+
+        enviar_email_qrcode(email_usuario, "NetCars - Pagamento da Entrada", 'email_pix.html', context)
+
         con.commit()
 
         return jsonify({'success': 'Seu parcelamento foi gerado com sucesso!'}), 200
@@ -249,7 +289,11 @@ def buscar_financiamento():
 
             lista_ids_financiamento = [row[0] for row in result_id_financiamento]
 
+            rep = 0
+
             for id_financiamento in lista_ids_financiamento:
+                rep += 1
+
                 cursor.execute('''
                         SELECT 1 FROM FINANCIAMENTO_PARCELA
                         WHERE ID_FINANCIAMENTO = ?
@@ -259,7 +303,10 @@ def buscar_financiamento():
                 pendente = cursor.fetchone()
 
                 if not pendente:
-                    continue
+                    if rep == len(lista_ids_financiamento):
+                        return jsonify({'error': 'Nenhnum financiamento encontrado.'}), 400
+                    else:
+                        continue
 
                 cursor.execute('''
                         SELECT ENTRADA, QNT_PARCELAS, TIPO_VEICULO, ID_VEICULO, VALOR_TOTAL 
