@@ -161,7 +161,7 @@ def financiamento():
 
         con.commit()
 
-        return jsonify({'success': 'Seu parcelamento foi gerado com sucesso! Veja mais detalhes na seção "financiamento".'}), 200
+        return jsonify({'success': 'Seu parcelamento foi gerado com sucesso!'}), 200
 
     except Exception as e:
         con.rollback()
@@ -238,7 +238,9 @@ def buscar_financiamento():
                 'concluidos': concluidos,
                 'em_andamento': em_andamento
             }), 200
+
         else:
+
             cursor.execute('''
                     SELECT ID_FINANCIAMENTO, ENTRADA, QNT_PARCELAS, TIPO_VEICULO, ID_VEICULO, VALOR_TOTAL 
                     FROM FINANCIAMENTO WHERE ID_USUARIO = ?

@@ -64,7 +64,7 @@ def compra_a_vista():
 
         con.commit()
 
-        return jsonify({'success': 'Compra efetuada com sucesso! Veja mais detalhes na seção de "Histórico de compras".'}), 200
+        return jsonify({'success': 'Compra efetuada com sucesso! Veja mais detalhes clicando em "Ver detalhes".'}), 200
     except Exception as e:
         print({"error": e})
         return jsonify({"error": e}), 400
