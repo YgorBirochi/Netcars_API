@@ -14,6 +14,7 @@ def remover_bearer(token):
         return token[len('Bearer '):]
     else:
         return token
+
 def buscar_dados_carro_por_id(id_carro):
     cursor = con.cursor()
     query = '''
@@ -169,94 +170,6 @@ def buscar_reserva():
         data_carro = cursor.fetchall()
 
         cursor.execute("SELECT ID_MOTO FROM MOTOS WHERE RESERVADO IS True AND ID_USUARIO_RESERVA = ?", (id_usuario,))
-        data_moto = cursor.fetchall()
-
-    id_carro = [row[0] for row in data_carro]
-    dadosCarro = [buscar_dados_carro_por_id(id) for id in id_carro]
-
-    id_moto = [row[0] for row in data_moto]
-    dadosMoto = [buscar_dados_moto_por_id(id) for id in id_moto]
-
-    return jsonify({
-        'carros': dadosCarro,
-        'motos': dadosMoto
-    })
-
-@app.route('/buscar_venda', methods=['GET'])
-def buscar_venda():
-    token = request.headers.get('Authorization')
-    if not token:
-        return jsonify({'error': 'Token de autenticação necessário'}), 401
-
-    token = remover_bearer(token)
-    try:
-        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
-        id_usuario = payload['id_usuario']
-    except jwt.ExpiredSignatureError:
-        return jsonify({'error': 'Token expirado'}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({'error': 'Token inválido'}), 401
-
-    cursor = con.cursor()
-
-    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
-
-    user = cursor.fetchone()
-
-    if not user:
-        return jsonify({
-            'error': 'Usuário não encontrado.'
-        }), 400
-
-    tipo_usuario = user[0]
-
-    if tipo_usuario in [1, 2]:
-        cursor.execute(
-            '''
-            SELECT ID_CARRO
-            FROM carros
-            INNER JOIN venda_compra
-            ON carros.id_carro = venda_compra.id_veiculo
-            WHERE venda_compra.tipo_veiculo = 1 AND carros.ativo = 0
-            AND venda_compra.status = 2
-            '''
-        )
-        data_carro = cursor.fetchall()
-
-        cursor.execute(
-            '''
-            SELECT ID_MOTO
-            FROM motos
-            INNER JOIN venda_compra
-            ON motos.id_moto = venda_compra.id_veiculo
-            WHERE venda_compra.tipo_veiculo = 2 AND motos.ativo = 0
-            AND venda_compra.status = 2
-            '''
-        )
-        data_moto = cursor.fetchall()
-    else:
-        cursor.execute(
-            '''
-            SELECT ID_CARRO
-            FROM carros
-            INNER JOIN venda_compra
-            ON carros.id_carro = venda_compra.id_veiculo
-            WHERE venda_compra.id_usuario = ? AND carros.ativo = 0
-            AND venda_compra.tipo_veiculo = 1 AND venda_compra.status = 2
-            ''', (id_usuario,)
-        )
-        data_carro = cursor.fetchall()
-
-        cursor.execute(
-            '''
-            SELECT ID_MOTO
-            FROM motos
-            INNER JOIN venda_compra
-            ON motos.id_moto = venda_compra.id_veiculo
-            WHERE venda_compra.id_usuario = ? AND motos.ativo = 0
-            AND venda_compra.tipo_veiculo = 2 AND venda_compra.status = 2
-            ''', (id_usuario,)
-        )
         data_moto = cursor.fetchall()
 
     id_carro = [row[0] for row in data_carro]
