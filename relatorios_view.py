@@ -1244,6 +1244,7 @@ def criar_pdf_manutencao():
     dia = request.args.get('dia', '').strip()
     mes = request.args.get('mes', '').strip()
     ano = request.args.get('ano', '').strip()
+    id_manutencao = request.args.get('id', '').strip()
 
     # Query principal
     query = """
@@ -1264,23 +1265,29 @@ def criar_pdf_manutencao():
     """
 
     params = []
-    if tipo_veic.lower() == 'carros':
-        query += " AND m.TIPO_VEICULO = ?"
-        params.append(1)
-    elif tipo_veic.lower() == 'motos':
-        query += " AND m.TIPO_VEICULO = ?"
-        params.append(2)
-    if dia:
-        query += " AND EXTRACT(DAY FROM m.DATA_MANUTENCAO) = ?"
-        params.append(int(dia))
-    if mes:
-        query += " AND EXTRACT(MONTH FROM m.DATA_MANUTENCAO) = ?"
-        params.append(int(mes))
-    if ano:
-        query += " AND EXTRACT(YEAR FROM m.DATA_MANUTENCAO) = ?"
-        params.append(int(ano))
+
+    if id_manutencao:
+        query += " AND m.ID_MANUTENCAO = ?"
+        params.append(id_manutencao)
+    else:
+        if tipo_veic.lower() == 'carros':
+            query += " AND m.TIPO_VEICULO = ?"
+            params.append(1)
+        elif tipo_veic.lower() == 'motos':
+            query += " AND m.TIPO_VEICULO = ?"
+            params.append(2)
+        if dia:
+            query += " AND EXTRACT(DAY FROM m.DATA_MANUTENCAO) = ?"
+            params.append(int(dia))
+        if mes:
+            query += " AND EXTRACT(MONTH FROM m.DATA_MANUTENCAO) = ?"
+            params.append(int(mes))
+        if ano:
+            query += " AND EXTRACT(YEAR FROM m.DATA_MANUTENCAO) = ?"
+            params.append(int(ano))
 
     cursor = con.cursor()
+
     cursor.execute(query, params)
     rows = cursor.fetchall()
     cursor.close()
