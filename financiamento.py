@@ -103,10 +103,10 @@ def financiamento():
 
     cursor = con.cursor()
 
-    cursor.execute('SELECT 1 FROM FINANCIAMENTO WHERE ID_USUARIO = ?', (id_usuario,))
+    cursor.execute('SELECT 1 FROM VENDA_COMPRA WHERE ID_USUARIO = ? AND STATUS = 1', (id_usuario,))
 
     if cursor.fetchone():
-        return jsonify({'error': 'Você já possui um parcelamento em andamento.'}), 400
+        return jsonify({'error': 'Você já possui um financiamento em andamento.'}), 400
 
     data = request.get_json()
 
