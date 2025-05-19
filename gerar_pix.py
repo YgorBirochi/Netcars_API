@@ -12,6 +12,10 @@ import smtplib
 import jwt
 import requests
 import uuid
+import locale
+
+# 1) Configura para português do Brasil
+locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
 
 class Config:
     SCHEDULER_API_ENABLED = True
@@ -19,6 +23,9 @@ class Config:
 app.config.from_object(Config())
 scheduler = APScheduler()
 scheduler.init_app(app)
+
+def formata_brasileiro(val):
+    return locale.format_string('%.2f', val, grouping=True)
 
 def Buscar_Usuario_Devedor():
     with app.app_context():
@@ -69,7 +76,7 @@ def Buscar_Usuario_Devedor():
                 context = {
                     "nome_usuario": nome_completo,
                     "email_destinatario": email,
-                    "dados_user": {"nome": nome_completo, "email": email, "qrcode_url": link, "valor": valor},
+                    "dados_user": {"nome": nome_completo, "email": email, "qrcode_url": link, "valor": formata_brasileiro(valor)},
                     "payload_completo": payload_completo,
                     "data_limite_str": data_limite_str,
                     "endereco_concessionaria": "Av. Exemplo, 1234 - Centro, Cidade Fictícia",
@@ -93,7 +100,7 @@ scheduler.add_job(
     id='BuscarUsuarioDevedor',
     func=Buscar_Usuario_Devedor,
     trigger='interval',
-    minutes=1440
+    minutes=1
 )
 scheduler.start()
 
