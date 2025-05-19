@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from main import app, con
+import os
 
 @app.route('/obter_nome_garagem', methods=["GET"])
 def obter_nome_garagem():
@@ -97,3 +98,16 @@ def att_config_garagem():
     cursor.close()
 
     return jsonify({'success': 'Dados atualizados com sucesso!'}), 200
+
+@app.route('/obter_logo', methods=["GET"])
+def obter_logo():
+    # Define o caminho para a pasta de imagens do carro (ex: uploads/Carros/<id_carro>)
+    images_dir = os.path.join(app.root_path, upload_folder, 'Carros', str(id_carro))
+    imagens = []
+
+    # Verifica se o diretório existe
+    if os.path.exists(images_dir):
+        for file in os.listdir(images_dir):
+            if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                imagem_url = url_for('get_car_image', id_carro=id_carro, filename=file, _external=True)
+                imagens.append(imagem_url)
