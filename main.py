@@ -34,6 +34,7 @@ from manutencao import *
 from financiamento import *
 from venda import *
 from movimentacao import *
+from config_view import *
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
