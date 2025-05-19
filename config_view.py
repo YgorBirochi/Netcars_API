@@ -171,3 +171,37 @@ def obter_cores():
         'cor_fund_2': cor_fund_2,
         'cor_texto': cor_texto
     }), 200
+
+@app.route('/att_cores', methods=['PUT'])
+def att_cores():
+    data = request.get_json() or {}
+
+    cor_princ = data.get('cor_princ', '')
+    cor_fund_1 = data.get('cor_fund_1', '')
+    cor_fund_2 = data.get('cor_fund_2', '')
+    cor_texto = data.get('cor_texto', '')
+
+    if not cor_princ or not cor_fund_1 or not cor_fund_2 or not cor_texto:
+        return jsonify({'error': 'Dados incompletos.'}), 400
+
+    cursor = con.cursor()
+
+    cursor.execute("""
+            UPDATE CONFIG_GARAGEM
+            SET
+                COR_PRINC = ?,
+                COR_FUND_1 = ?,
+                COR_FUND_2 = ?,
+                COR_TEXTO = ?
+            WHERE ID_CONFIG_GARAGEM = 1
+        """, (
+        cor_princ,
+        cor_fund_1,
+        cor_fund_2,
+        cor_texto
+    ))
+
+    con.commit()
+    cursor.close()
+
+    return jsonify({'success': 'Cores atualizadas com sucesso!'}), 200
