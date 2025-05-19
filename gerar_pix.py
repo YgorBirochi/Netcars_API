@@ -27,6 +27,7 @@ scheduler.init_app(app)
 def formata_brasileiro(val):
     return locale.format_string('%.2f', val, grouping=True)
 
+# FUNÇÃO PARA ENVIAR EMAIL DE LEMBRETE DA FATURA
 def Buscar_Usuario_Devedor():
     with app.app_context():
         cur = con.cursor()
@@ -100,7 +101,8 @@ scheduler.add_job(
     id='BuscarUsuarioDevedor',
     func=Buscar_Usuario_Devedor,
     trigger='interval',
-    minutes=1
+    # TEMPO PARA EXECUÇÃO DA TRIGGER
+    minutes=1440
 )
 scheduler.start()
 

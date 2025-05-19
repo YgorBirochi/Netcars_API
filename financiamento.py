@@ -491,6 +491,8 @@ def gerar_qrcode_parcela_atual(tipo):
 
     return response
 
+
+# FUNÇÃO PARA PAGAMENTO DE PARCELA
 @app.route('/pagar_parcela/<int:id_parcela>/<int:amortizada>', methods = ['GET'])
 def pagar_parcela(id_parcela, amortizada):
     if id_parcela is None or amortizada is None or amortizada not in [0, 1]:
@@ -506,20 +508,25 @@ def pagar_parcela(id_parcela, amortizada):
         return jsonify({'error': 'Parcela não encontrada.'}), 400
 
     valor_parcela = float(result_parc[0])
+    # SELECIONA A DATA DE VENCIMENTO
     data_vencimento = result_parc[1]
 
+    # OBTÉM A DATA ATUAL
     data_atual = datetime.now()
 
-    # Aplica juros de 1% ao dia em caso de atraso
+    # FORMATA A DATA DE VENCIMENTO CASO NÃO ESTEJA FORMATADA
     if isinstance(data_vencimento, str):
         data_vencimento = datetime.strptime(data_vencimento, "%Y-%m-%d")  # ajuste o formato se necessário
 
+    # VERIFICA SE A DATA ATUAL É MAIOR QUE A DATA DE VENCIMENTO
     if data_atual > data_vencimento:
+        # CALCULA A QUANTIDADE DE DIAS DE ATRASO
         dias_atraso = (data_atual - data_vencimento).days
 
-        # Calcula o valor da parcela com juros
+        # CALCULA O VALOR DA PARCELA COM JUROS
         valor_parcela = valor_parcela * (1 + JUROS) ** dias_atraso
 
+        # ATUALIZA O BANCO DE DADOS E INSERE O NOVO VALOR DA PARCELA
         cursor.execute('''
                         UPDATE FINANCIAMENTO_PARCELA
                         SET VALOR_PARCELA = ?
