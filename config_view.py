@@ -1,5 +1,5 @@
-from flask import Flask, request, jsonify
-from main import app, con
+from flask import Flask, request, jsonify, url_for, send_from_directory
+from main import app, con, upload_folder
 import os
 
 @app.route('/obter_nome_garagem', methods=["GET"])
@@ -99,15 +99,47 @@ def att_config_garagem():
 
     return jsonify({'success': 'Dados atualizados com sucesso!'}), 200
 
+@app.route('/uploads/logo')
+def get_logo_img():
+    return send_from_directory(
+        os.path.join(app.root_path, 'upload', 'Logo'),
+        'logo.png'
+    )
+
 @app.route('/obter_logo', methods=["GET"])
 def obter_logo():
-    # Define o caminho para a pasta de imagens do carro (ex: uploads/Carros/<id_carro>)
-    images_dir = os.path.join(app.root_path, upload_folder, 'Carros', str(id_carro))
-    imagens = []
+    imagem_url = url_for('get_logo_img', _external=True)
+    # normalmente retornamos 200, mas se quiser 400, mantenha
+    return jsonify({'img_url': imagem_url}), 200
 
-    # Verifica se o diretório existe
-    if os.path.exists(images_dir):
-        for file in os.listdir(images_dir):
-            if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                imagem_url = url_for('get_car_image', id_carro=id_carro, filename=file, _external=True)
-                imagens.append(imagem_url)
+# Caminho onde o logo será salvo
+UPLOAD_FOLDER = os.path.join(app.root_path, 'upload', 'Logo')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+
+# Função auxiliar para validar extensões
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/editar_logo', methods=['POST'])
+def editar_logo():
+    if 'file' not in request.files:
+        return jsonify({'error': 'Arquivo não enviado'}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({'error': 'Nenhum arquivo selecionado'}), 400
+
+    if file and allowed_file(file.filename):
+        # Garante que a pasta exista
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+        # Caminho completo onde o arquivo será salvo como logo.png
+        logo_path = os.path.join(UPLOAD_FOLDER, 'logo.png')
+
+        # Salva o arquivo substituindo o antigo
+        file.save(logo_path)
+
+        return jsonify({'success': 'Logo atualizado com sucesso!'}), 200
+    else:
+        return jsonify({'error': 'Extensão de arquivo não permitida'}), 400
