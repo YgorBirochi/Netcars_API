@@ -143,3 +143,31 @@ def editar_logo():
         return jsonify({'success': 'Logo atualizado com sucesso!'}), 200
     else:
         return jsonify({'error': 'Extensão de arquivo não permitida'}), 400
+
+@app.route('/obter_cores', methods=['GET'])
+def obter_cores():
+    cursor = con.cursor()
+
+    cursor.execute('''
+        SELECT 
+        COR_PRINC,
+        COR_FUND_1,
+        COR_FUND_2,
+        COR_TEXTO
+        FROM CONFIG_GARAGEM
+        WHERE ID_CONFIG_GARAGEM = 1
+    ''')
+
+    data = cursor.fetchone()
+
+    cor_princ = data[0]
+    cor_fund_1 = data[1]
+    cor_fund_2 = data[2]
+    cor_texto = data[3]
+
+    return jsonify({
+        'cor_princ': cor_princ,
+        'cor_fund_1': cor_fund_1,
+        'cor_fund_2': cor_fund_2,
+        'cor_texto': cor_texto
+    }), 200
