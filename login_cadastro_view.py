@@ -1,3 +1,5 @@
+import random
+
 from flask import Flask, jsonify, request
 from main import app, con, senha_secreta
 import re
@@ -5,6 +7,7 @@ from flask_bcrypt import generate_password_hash, check_password_hash
 import jwt
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
+from esqueci_senha import enviar_email_verificacao
 
 def generate_token(user_id, email):
     payload = {'id_usuario': user_id, 'email': email}
@@ -125,6 +128,7 @@ def get_user_filtro():
     cursor.close()
     return jsonify({'usuarios': user_dic}), 200
 
+
 @app.route('/cadastro', methods=['POST'])
 def create_user():
     data = request.get_json()
@@ -139,7 +143,7 @@ def create_user():
     cursor.execute("SELECT 1 FROM USUARIO WHERE email = ?", (email,))
 
     if cursor.fetchone():
-        return jsonify({'error': 'Email já cadastrado'}), 400
+        return jsonify({'error': 'Email já cadastrado.'}), 400
 
     senha_check = validar_senha(senha)
     if senha_check is not True:
@@ -147,25 +151,149 @@ def create_user():
 
     senha_hash = generate_password_hash(senha).decode('utf-8')
 
-    cursor.execute("INSERT INTO USUARIO (nome_completo, email, senha_hash, ativo, tipo_usuario) VALUES (?, ?, ?, 1, ?) RETURNING ID_USUARIO", (nome, email, senha_hash, tipo_usuario))
+    # Gerar código de verificação de 6 dígitos
+    codigo = ''.join(random.choices('0123456789', k=6))
+    codigo_criado_em = datetime.now()
+
+    # Usuário é cadastrado como inativo (0) e email não confirmado (0)
+    cursor.execute("""
+        INSERT INTO USUARIO (nome_completo, email, senha_hash, ativo, tipo_usuario, 
+                            codigo, codigo_criado_em, email_confirmado) 
+        VALUES (?, ?, ?, 0, ?, ?, ?, 0) 
+        RETURNING ID_USUARIO
+    """, (nome, email, senha_hash, tipo_usuario, codigo, codigo_criado_em))
 
     id_usuario = cursor.fetchone()[0]
-
     con.commit()
 
+    # Enviar e-mail de verificação
+    enviar_email_verificacao(email, codigo)
+
     cursor.close()
-    token = generate_token(id_usuario, email)
 
     return jsonify({
-        'success': "Email cadastrado com sucesso!",
+        'success': "Cadastro realizado com sucesso! Por favor, verifique seu email para ativar sua conta.",
         'dados': {
             'nome_completo': nome,
             'email': email,
-            'id_usuario': id_usuario,
-            'tipo_usuario': tipo_usuario,
+            'id_usuario': id_usuario
+        }
+    }), 200
+
+
+@app.route('/verificar_email', methods=['POST'])
+def verificar_email():
+    data = request.get_json()
+    email = data.get('email')
+    codigo = str(data.get('codigo'))
+
+    if not email or not codigo:
+        return jsonify({'error': 'Dados incompletos.'}), 400
+
+    cursor = con.cursor()
+
+    cursor.execute("SELECT id_usuario, codigo_criado_em, codigo FROM USUARIO WHERE email = ?", (email,))
+    user = cursor.fetchone()
+    if user is None:
+        return jsonify({'error': 'Email não cadastrado.'}), 404
+
+    user_id = user[0]
+    codigo_criado_em = user[1]
+    codigo_valido = str(user[2])
+
+    horario_atual = datetime.now()
+
+    # Verifica se o código expirou (10 minutos)
+    if horario_atual - codigo_criado_em > timedelta(minutes=10):
+        return jsonify({'error': 'Código expirado. Solicite um novo código.'}), 401
+
+    if codigo != codigo_valido:
+        return jsonify({'error': 'Código incorreto. Verifique novamente seu email.'}), 401
+
+    # Atualiza o usuário para ativo e com email confirmado
+    cursor.execute('''
+        UPDATE USUARIO 
+        SET codigo = NULL, 
+            codigo_criado_em = NULL, 
+            ativo = 1, 
+            email_confirmado = 1 
+        WHERE id_usuario = ?
+    ''', (user_id,))
+
+    con.commit()
+
+    # Buscar dados do usuário para o login
+    cursor.execute("""
+        SELECT id_usuario, email, nome_completo, tipo_usuario 
+        FROM USUARIO 
+        WHERE id_usuario = ?
+    """, (user_id,))
+
+    user_data = cursor.fetchone()
+    cursor.close()
+
+    if not user_data:
+        return jsonify({'error': 'Erro ao buscar dados do usuário.'}), 500
+
+    # Gerar token para login automático
+    token = generate_token(user_id, email)
+
+    return jsonify({
+        'success': 'Email verificado com sucesso! Sua conta foi ativada.',
+        'dados': {
+            'id_usuario': user_data[0],
+            'email': user_data[1],
+            'nome_completo': user_data[2],
+            'tipo_usuario': user_data[3],
             'token': token
         }
-    })
+    }), 200
+
+
+# Rota para reenviar o código de verificação
+@app.route('/reenviar_codigo_verificacao', methods=['POST'])
+def reenviar_codigo_verificacao():
+    data = request.get_json()
+    email = data.get('email')
+
+    if not email:
+        return jsonify({'error': 'Email não informado.'}), 400
+
+    cursor = con.cursor()
+    cursor.execute("SELECT id_usuario, email_confirmado FROM USUARIO WHERE email = ?", (email,))
+    user = cursor.fetchone()
+
+    if user is None:
+        return jsonify({'error': 'Email não cadastrado.'}), 404
+
+    user_id = user[0]
+    email_confirmado = user[1]
+
+    if email_confirmado == 1:
+        return jsonify({'error': 'Este email já foi verificado.'}), 400
+
+    # Gerar novo código
+    codigo = ''.join(random.choices('0123456789', k=6))
+    codigo_criado_em = datetime.now()
+
+    # Enviar e-mail de verificação
+    enviar_email_verificacao(email, codigo)
+
+    # Atualizar o código no banco de dados
+    cursor.execute("""
+        UPDATE USUARIO 
+        SET codigo = ?, 
+            codigo_criado_em = ? 
+        WHERE id_usuario = ?
+    """, (codigo, codigo_criado_em, user_id))
+
+    con.commit()
+    cursor.close()
+
+    return jsonify({
+        'success': 'Novo código de verificação enviado para o seu email.'
+    }), 200
+
 
 @app.route('/update_user', methods=['PUT'])
 def update_user_simples():
@@ -422,6 +550,7 @@ def deletar_usuario(id):
 
 tentativas = 0
 
+
 @app.route('/login', methods=['POST'])
 def login_user():
     global tentativas
@@ -434,7 +563,9 @@ def login_user():
         return jsonify({"error": "Todos os campos (email, senha) são obrigatórios."}), 400
 
     cursor = con.cursor()
-    cursor.execute("SELECT id_usuario, email, nome_completo, data_nascimento, cpf_cnpj, telefone, senha_hash, ativo, tipo_usuario FROM USUARIO WHERE EMAIL = ?", (email,))
+    cursor.execute(
+        "SELECT id_usuario, email, nome_completo, data_nascimento, cpf_cnpj, telefone, senha_hash, ativo, tipo_usuario, email_confirmado FROM USUARIO WHERE EMAIL = ?",
+        (email,))
     user_data = cursor.fetchone()
 
     if not user_data:
@@ -450,10 +581,16 @@ def login_user():
     senha_hash = user_data[6]
     ativo = user_data[7]
     tipo_usuario = user_data[8]
+    email_confirmado = user_data[9]
 
     if not ativo:
         cursor.close()
         return jsonify({'error': 'Usuário inativo'}), 401
+
+    if not email_confirmado:
+        cursor.close()
+        return jsonify({'error': 'Email não verificado. Por favor, verifique seu email e confirme sua conta.',
+                        'verificacao_pendente': True}), 401
 
     if check_password_hash(senha_hash, senha):
         token = generate_token(id_usuario, email)
@@ -482,7 +619,7 @@ def login_user():
         cursor.close()
         return jsonify({"error": "Número máximo de tentativas de login excedido."}), 401
 
-    return jsonify({"error": "Senha incorreta."}), 401 
+    return jsonify({"error": "Senha incorreta."}), 401
 
 # Verificar tipo usuário
 
