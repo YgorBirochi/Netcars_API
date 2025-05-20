@@ -127,6 +127,8 @@ def att_config_garagem():
 
     return jsonify({'success': 'Dados atualizados com sucesso!'}), 200
 
+
+### LOGO
 @app.route('/uploads/logo')
 def get_logo_img():
     return send_from_directory(
@@ -140,8 +142,24 @@ def obter_logo():
     # normalmente retornamos 200, mas se quiser 400, mantenha
     return jsonify({'img_url': imagem_url}), 200
 
+### BANNER
+
+@app.route('/uploads/banner')
+def get_banner_img():
+    return send_from_directory(
+        os.path.join(app.root_path, 'upload', 'Banner'),
+        'banner-home.png'
+    )
+
+@app.route('/obter_banner', methods=["GET"])
+def obter_banner():
+    imagem_url = url_for('get_banner_img', _external=True)
+    # normalmente retornamos 200, mas se quiser 400, mantenha
+    return jsonify({'img_url': imagem_url}), 200
+
 # Caminho onde o logo será salvo
-UPLOAD_FOLDER = os.path.join(app.root_path, 'upload', 'Logo')
+UPLOAD_FOLDER_LOGO = os.path.join(app.root_path, 'upload', 'Logo')
+UPLOAD_FOLDER_BANNER = os.path.join(app.root_path, 'upload', 'Banner')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 # Função auxiliar para validar extensões
@@ -181,15 +199,61 @@ def editar_logo():
 
     if file and allowed_file(file.filename):
         # Garante que a pasta exista
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        os.makedirs(UPLOAD_FOLDER_LOGO, exist_ok=True)
 
         # Caminho completo onde o arquivo será salvo como logo.png
-        logo_path = os.path.join(UPLOAD_FOLDER, 'logo.png')
+        logo_path = os.path.join(UPLOAD_FOLDER_LOGO, 'logo.png')
 
         # Salva o arquivo substituindo o antigo
         file.save(logo_path)
 
         return jsonify({'success': 'Logo atualizado com sucesso!'}), 200
+    else:
+        return jsonify({'error': 'Extensão de arquivo não permitida'}), 400
+
+# EDITAR BANNER
+@app.route('/editar_banner', methods=['PUT'])
+def editar_banner():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    # Verifica se é um ADM que está tentando fazer a alteração
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type != 1:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'Arquivo não enviado'}), 400
+
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({'error': 'Nenhum arquivo selecionado'}), 400
+
+    if file and allowed_file(file.filename):
+        # Garante que a pasta exista
+        os.makedirs(UPLOAD_FOLDER_BANNER, exist_ok=True)
+
+        # Caminho completo onde o arquivo será salvo como banner.png
+        banner_path = os.path.join(UPLOAD_FOLDER_BANNER, 'banner-home.png')
+
+        # Salva o arquivo substituindo o antigo
+        file.save(banner_path)
+
+        return jsonify({'success': 'Banner atualizado com sucesso!'}), 200
     else:
         return jsonify({'error': 'Extensão de arquivo não permitida'}), 400
 
@@ -273,3 +337,71 @@ def att_cores():
     cursor.close()
 
     return jsonify({'success': 'Cores atualizadas com sucesso!'}), 200
+
+@app.route('/obter_footer', methods=['GET'])
+def obter_telefone():
+    cursor = con.cursor()
+
+    cursor.execute('''
+        SELECT 
+        TELEFONE,
+        EMAIL
+        FROM CONFIG_GARAGEM
+        WHERE ID_CONFIG_GARAGEM = 1
+    ''')
+
+    data = cursor.fetchone()
+
+    telefone = data[0]
+    email = data[1]
+
+    return jsonify({
+        'telefone': telefone,
+        'email': email
+    }), 200
+
+@app.route('/att_footer', methods=['PUT'])
+def att_telefone():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    # Verifica se é um ADM que está tentando fazer a alteração
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type != 1:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    data = request.get_json() or {}
+
+    telefone = data.get('telefone', '')
+    email = data.get('email', '')
+
+    if not telefone or not email:
+        return jsonify({'error': 'Dados incompletos.'}), 400
+
+    cursor.execute("""
+            UPDATE CONFIG_GARAGEM
+            SET
+                TELEFONE = ?,
+                EMAIL = ?
+            WHERE ID_CONFIG_GARAGEM = 1
+        """, (
+        telefone, email
+    ))
+
+    con.commit()
+    cursor.close()
+
+    return jsonify({'success': 'Informações do rodapé atualizadas com sucesso!'}), 200
