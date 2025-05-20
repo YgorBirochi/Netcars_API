@@ -1,6 +1,13 @@
 from flask import Flask, request, jsonify, url_for, send_from_directory
-from main import app, con, upload_folder
+from main import app, con, senha_secreta
 import os
+import jwt
+
+def remover_bearer(token):
+    if token.startswith('Bearer '):
+        return token[len('Bearer '):]
+    else:
+        return token
 
 @app.route('/obter_nome_garagem', methods=["GET"])
 def obter_nome_garagem():
@@ -59,6 +66,27 @@ def obter_config_garagem():
 
 @app.route('/att_config_garagem', methods=["PUT"])
 def att_config_garagem():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    # Verifica se é um ADM que está tentando fazer a alteração
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type != 1:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
     data = request.get_json() or {}
 
     primeiro_nome = data.get('primeiro_nome', "")
@@ -120,8 +148,29 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/editar_logo', methods=['POST'])
+@app.route('/editar_logo', methods=['PUT'])
 def editar_logo():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    # Verifica se é um ADM que está tentando fazer a alteração
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type != 1:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
     if 'file' not in request.files:
         return jsonify({'error': 'Arquivo não enviado'}), 400
 
@@ -174,6 +223,27 @@ def obter_cores():
 
 @app.route('/att_cores', methods=['PUT'])
 def att_cores():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    # Verifica se é um ADM que está tentando fazer a alteração
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type != 1:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
     data = request.get_json() or {}
 
     cor_princ = data.get('cor_princ', '')
@@ -183,8 +253,6 @@ def att_cores():
 
     if not cor_princ or not cor_fund_1 or not cor_fund_2 or not cor_texto:
         return jsonify({'error': 'Dados incompletos.'}), 400
-
-    cursor = con.cursor()
 
     cursor.execute("""
             UPDATE CONFIG_GARAGEM
