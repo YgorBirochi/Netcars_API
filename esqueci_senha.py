@@ -3,8 +3,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 from threading import Thread
+import jwt
 from flask import Flask, request, jsonify, render_template, current_app
-from main import app, con, senha_app_email, upload_folder
+from main import app, con, senha_app_email, upload_folder, senha_secreta
 import random, re
 from flask_bcrypt import generate_password_hash, check_password_hash
 import os
@@ -63,7 +64,7 @@ def enviar_email_recuperar_senha(email_destinatario, codigo):
     Thread(target=task_envio, daemon=True).start()
 
 # -----------------------------
-# Rotas
+# Rotas senha
 # -----------------------------
 
 @app.route('/gerar_codigo', methods=['POST'])
@@ -177,3 +178,42 @@ def redefinir_senha():
     cursor.close()
 
     return jsonify({'success': 'Senha redefinida com sucesso.'}), 200
+
+# -----------------------------
+# Envio de E-mail de Verificação (Assíncrono)
+# -----------------------------
+def enviar_email_verificacao(email_destinatario, codigo):
+    app_context = current_app._get_current_object()
+
+    def task_envio():
+        remetente = 'netcars.contato@gmail.com'
+        senha = senha_app_email
+        servidor_smtp = 'smtp.gmail.com'
+        porta_smtp = 465  # Conexão SSL direta
+        assunto = 'NetCars - Verificação de Email'
+
+        # Renderiza o template com as variáveis desejadas dentro do contexto da aplicação
+        with app_context.app_context():
+            corpo = render_template('email_confirmar_email.html', codigo=codigo, ano=datetime.now().year)
+
+        # Cria e configura a mensagem do e-mail
+        msg = MIMEMultipart()
+        msg['From'] = remetente
+        msg['To'] = email_destinatario
+        msg['Subject'] = assunto
+        msg.attach(MIMEText(corpo, 'html'))
+
+        try:
+            # Usando SSL direto (mais confiável com Gmail)
+            server = smtplib.SMTP_SSL(servidor_smtp, porta_smtp, timeout=60)
+            server.set_debuglevel(1)  # Ative para debugging
+            server.ehlo()  # Identifica-se ao servidor
+            server.login(remetente, senha)
+            text = msg.as_string()
+            server.sendmail(remetente, email_destinatario, text)
+            server.quit()
+            print(f"E-mail de verificação enviado para {email_destinatario}")
+        except Exception as e:
+            print(f"Erro ao enviar e-mail de verificação: {e}")
+
+    Thread(target=task_envio, daemon=True).start()
