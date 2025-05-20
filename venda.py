@@ -9,7 +9,6 @@ def remover_bearer(token):
     else:
         return token
 
-
 def buscar_dados_carro_por_id(id_carro):
     cursor = con.cursor()
     query = '''
@@ -186,9 +185,23 @@ def compra_a_vista():
         preco_venda = resposta[0]
 
         if tipo_veic == 1:
-            cursor.execute('UPDATE CARROS SET ATIVO = 0 WHERE ID_CARRO = ?', (id_veic,))
+            cursor.execute('''
+                UPDATE CARROS 
+                SET ATIVO = 0,
+                RESERVADO = NULL,
+                RESERVADO_EM = NULL,
+                ID_USUARIO_RESERVA = NULL
+                WHERE ID_CARRO = ?
+            ''', (id_veic,))
         else:
-            cursor.execute('UPDATE MOTOS SET ATIVO = 0 WHERE ID_MOTO = ?', (id_veic,))
+            cursor.execute('''
+                UPDATE MOTOS 
+                SET ATIVO = 0,
+                RESERVADO = NULL,
+                RESERVADO_EM = NULL,
+                ID_USUARIO_RESERVA = NULL
+                WHERE ID_MOTO = ?
+            ''', (id_veic,))
 
         cursor.execute('''
                 INSERT INTO VENDA_COMPRA 
