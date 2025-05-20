@@ -161,45 +161,47 @@ def financiamento():
         else:
             cursor.execute('UPDATE MOTOS SET ATIVO = 0 WHERE ID_MOTO = ?', (id_veic,))
 
-        # Dados da empresa
-        cursor.execute("SELECT RAZAO_SOCIAL, CHAVE_PIX, CIDADE FROM CONFIG_GARAGEM")
-        empresa = cursor.fetchone()
+        if entrada > 0:
+            # Dados da empresa
+            cursor.execute("SELECT RAZAO_SOCIAL, CHAVE_PIX, CIDADE FROM CONFIG_GARAGEM")
+            empresa = cursor.fetchone()
 
-        # Dados do usuário
-        cursor.execute("SELECT nome_completo, email, cpf_cnpj, telefone FROM usuario WHERE id_usuario = ?",
-                       (id_usuario,))
-        usuario = cursor.fetchone()
-        cursor.close()
+            # Dados do usuário
+            cursor.execute("SELECT nome_completo, email, cpf_cnpj, telefone FROM usuario WHERE id_usuario = ?",
+                           (id_usuario,))
+            usuario = cursor.fetchone()
+            cursor.close()
 
-        if not empresa or not usuario:
-            return jsonify({'error': 'Erro ao buscar dados da empresa ou usuário.'}), 500
+            if not empresa or not usuario:
+                return jsonify({'error': 'Erro ao buscar dados da empresa ou usuário.'}), 500
 
-        nome_empresa, chave_pix, cidade = empresa
-        nome_usuario, email_usuario, cpf_usuario, telefone_usuario = usuario
+            nome_empresa, chave_pix, cidade = empresa
+            nome_usuario, email_usuario, cpf_usuario, telefone_usuario = usuario
 
-        payload_pix, link_qrcode, nome_arquivo = gerar_pix_funcao(nome_empresa, entrada, chave_pix, cidade)
-        data_envio = datetime.now()
-        data_limite = data_envio + timedelta(days=1)
-        data_limite_str = data_limite.strftime("%d/%m/%Y")
+            payload_pix, link_qrcode, nome_arquivo = gerar_pix_funcao(nome_empresa, entrada, chave_pix, cidade)
 
-        context = {
-            'nome_usuario': nome_usuario,
-            'email_destinatario': email_usuario,
-            'dados_user': {
-                'nome': nome_usuario,
-                'email': email_usuario,
-                'cpf': cpf_usuario,
-                'telefone': telefone_usuario,
-                'qrcode_url': link_qrcode,
-                'valor': f"{entrada:.2f}"
-            },
-            'payload_completo': payload_pix,
-            'data_limite_str': data_limite_str,
-            'endereco_concessionaria': "Av. Exemplo, 1234 - Centro, Cidade Fictícia",
-            'ano': datetime.now().year
-        }
+            data_envio = datetime.now()
+            data_limite = data_envio + timedelta(days=1)
+            data_limite_str = data_limite.strftime("%d/%m/%Y")
 
-        enviar_email_qrcode(email_usuario, "NetCars - Pagamento da Entrada", 'email_pix.html', context)
+            context = {
+                'nome_usuario': nome_usuario,
+                'email_destinatario': email_usuario,
+                'dados_user': {
+                    'nome': nome_usuario,
+                    'email': email_usuario,
+                    'cpf': cpf_usuario,
+                    'telefone': telefone_usuario,
+                    'qrcode_url': link_qrcode,
+                    'valor': f"{entrada:.2f}"
+                },
+                'payload_completo': payload_pix,
+                'data_limite_str': data_limite_str,
+                'endereco_concessionaria': "Av. Exemplo, 1234 - Centro, Cidade Fictícia",
+                'ano': datetime.now().year
+            }
+
+            enviar_email_qrcode(email_usuario, "NetCars - Pagamento da Entrada", 'email_pix.html', context)
 
         con.commit()
 
