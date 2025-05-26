@@ -31,9 +31,10 @@ def buscar_dados_carro_por_id(id_carro):
         SELECT VALOR_TOTAL 
         FROM VENDA_COMPRA 
         WHERE TIPO_VEICULO = 1 AND ID_VEICULO = ?
+        AND TIPO_VENDA_COMPRA = 1
     ''', (id_carro,))
 
-    preco_venda =  cursor.fetchone()[0]
+    preco_venda = cursor.fetchone()[0]
 
     cursor.close()
 
@@ -97,6 +98,7 @@ def buscar_dados_moto_por_id(id_moto):
             SELECT VALOR_TOTAL 
             FROM VENDA_COMPRA 
             WHERE TIPO_VEICULO = 2 AND ID_VEICULO = ?
+            AND TIPO_VENDA_COMPRA = 1
         ''', (id_moto,))
 
     preco_venda = cursor.fetchone()[0]
