@@ -492,6 +492,9 @@ class CustomUsuarioPDF(FPDF):
 
         return "..."
 
+from fpdf import FPDF
+from datetime import datetime
+
 class CustomManutencaoPDF(FPDF):
     def __init__(self):
         super().__init__()
@@ -519,11 +522,30 @@ class CustomManutencaoPDF(FPDF):
     def footer(self):
         self.set_y(-15)
         self.set_font("Arial", "I", 8)
-        self.set_text_color(150,150,150)
+        self.set_text_color(150, 150, 150)
         self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", align='C')
 
     def create_manutencao_report(self, manutencoes):
         self.alias_nb_pages()
+
+        # Se não há manutenções, ou todas chegaram sem serviços, exibe mensagem única
+        no_manut = (
+            not manutencoes
+            or all(len(m['servicos']) == 0 for m in manutencoes)
+        )
+        if no_manut:
+            self.add_page()
+            self.ln(20)
+            self.set_font("Arial", "", 12)
+            self.set_text_color(*self.primary_color)
+            self.cell(
+                0, 10,
+                "Não há nenhuma manutenção para os critérios informados.",
+                ln=True, align="C"
+            )
+            return
+
+        # Caso haja ao menos uma manutenção com serviços, gera um relatório por manutenção
         for m in manutencoes:
             self.add_page()
             self._draw_header_box(m)
@@ -537,9 +559,9 @@ class CustomManutencaoPDF(FPDF):
         total_w = self.w - 20
         total_h = 30
         self.rect(x0, y0, total_w, total_h)
-        # Define largura das colunas internas
+
         col_w = total_w / 4
-        # Texto dentro do header
+        # Primeira linha: Veículo e Data
         self.set_font("Arial", "B", self.font_bold)
         self.set_xy(x0 + 2, y0 + 2)
         self.cell(col_w, self.line_h, "Veículo:", border=0)
@@ -548,56 +570,75 @@ class CustomManutencaoPDF(FPDF):
         self.set_font("Arial", "B", self.font_bold)
         self.cell(col_w, self.line_h, "Data:", border=0)
         self.set_font("Arial", "", self.font_norm)
-        self.cell(col_w, self.line_h, datetime.strptime(str(m['data_manutencao']), '%Y-%m-%d').strftime('%d/%m/%Y'), border=0, ln=1)
-        # Segunda linha
+        data_fmt = datetime.strptime(str(m['data_manutencao']), '%Y-%m-%d').strftime('%d/%m/%Y')
+        self.cell(col_w, self.line_h, data_fmt, border=0, ln=1)
+
+        # Segunda linha: Placa e Valor Total
         self.set_font("Arial", "B", self.font_bold)
         self.set_x(x0 + 2)
         self.cell(col_w, self.line_h, "Placa:", border=0)
         self.set_font("Arial", "", self.font_norm)
-        self.cell(col_w, self.line_h, m['placa'], border=0)
+        self.cell(col_w, self.line_h, m.get('placa', '-'), border=0)
         self.set_font("Arial", "B", self.font_bold)
         self.cell(col_w, self.line_h, "Valor Total:", border=0)
         self.set_font("Arial", "", self.font_norm)
-        self.cell(col_w, self.line_h, f"R$ {m['valor_total']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'), border=0)
-        # Observação terceira linha
+        valor_fmt = f"R$ {m.get('valor_total', 0):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        self.cell(col_w, self.line_h, valor_fmt, border=0)
+
+        # Terceira linha: Observação
         self.set_xy(x0 + 2, y0 + 2 + self.line_h * 2)
         self.set_font("Arial", "B", self.font_bold)
         self.cell(0, self.line_h, "Observação:", border=0)
         self.ln(self.line_h)
-
         self.set_font("Arial", "", self.font_norm)
-        self.set_x(x0 + 2)  # alinhamento horizontal
-        self.multi_cell(total_w - 4, self.line_h, m['observacao'] or '-')
+        self.set_x(x0 + 2)
+        self.multi_cell(total_w - 4, self.line_h, m.get('observacao') or '-')
 
     def _draw_services_table(self, servicos):
         # Cabeçalho da tabela
         self.set_font("Arial", "B", self.font_bold)
         self.set_fill_color(230, 215, 245)
-        # Colunas: descrição (60%), unitário (13%), quantidade (13%), total (14%)
         tbl_w = self.w - 20
         w_desc = tbl_w * 0.6
         w_unit = tbl_w * 0.13
         w_qtd = tbl_w * 0.13
         w_total = tbl_w * 0.14
-        y_start = self.get_y()
-        self.set_text_color(40,40,40)
+
+        self.set_text_color(40, 40, 40)
         self.cell(w_desc, self.line_h, "Descrição", border=1, fill=True)
         self.cell(w_unit, self.line_h, "Vr Unit.", border=1, fill=True)
         self.cell(w_qtd, self.line_h, "Qtd.", border=1, fill=True)
         self.cell(w_total, self.line_h, "Total", border=1, fill=True, ln=1)
+
         # Linhas de serviços
         self.set_font("Arial", "", self.font_norm)
         self.set_text_color(*self.primary_color)
         for srv in servicos:
-            self.cell(w_desc, self.line_h, srv['descricao'], border=1)
-            self.cell(w_unit, self.line_h, f"R$ {srv['valor_unitario']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'), border=1)
-            self.cell(w_qtd, self.line_h, str(srv['quantidade']), border=1)
-            self.cell(w_total, self.line_h, f"R$ {srv['total_item']:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'), border=1, ln=1)
-        # Linha de total geral
+            self.cell(w_desc, self.line_h, srv.get('descricao', '-'), border=1)
+            unit = f"R$ {srv.get('valor_unitario', 0):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            self.cell(w_unit, self.line_h, unit, border=1)
+            self.cell(w_qtd, self.line_h, str(srv.get('quantidade', 0)), border=1)
+            tot = f"R$ {srv.get('total_item', 0):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            self.cell(w_total, self.line_h, tot, border=1, ln=1)
+
+        # Total geral
         self.set_font("Arial", "B", self.font_bold)
         self.cell(w_desc + w_unit + w_qtd, self.line_h, "Total Geral", border=1)
-        total_val = sum(s['total_item'] for s in servicos)
-        self.cell(w_total, self.line_h, f"R$ {total_val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.'), border=1, ln=1)
+        total_val = sum(s.get('total_item', 0) for s in servicos)
+        total_fmt = f"R$ {total_val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        self.cell(w_total, self.line_h, total_fmt, border=1, ln=1)
+
+    # Override para evitar NoneType no método interno de escape do FPDF
+    def _escape(self, s):
+        if s is None:
+            return ''
+        s = str(s)
+        return (
+            s.replace('\\', '\\\\')
+             .replace(')', '\\)')
+             .replace('(', '\\(')
+             .replace('\r', '\\r')
+        )
 
 
 class CustomReceitaDespesaPDF(FPDF):
