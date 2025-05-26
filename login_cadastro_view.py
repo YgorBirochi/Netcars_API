@@ -8,6 +8,7 @@ import jwt
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from esqueci_senha import enviar_email_verificacao
+import threading
 
 def generate_token(user_id, email):
     payload = {'id_usuario': user_id, 'email': email}
@@ -184,20 +185,21 @@ def create_user():
 @app.route('/verificar_email', methods=['POST'])
 def verificar_email():
     data = request.get_json()
-    email = data.get('email')
+
+    id_usuario = data.get('id_usuario')
     codigo = str(data.get('codigo'))
 
-    if not email or not codigo:
+    if not id_usuario or not codigo:
         return jsonify({'error': 'Dados incompletos.'}), 400
 
     cursor = con.cursor()
 
-    cursor.execute("SELECT id_usuario, codigo_criado_em, codigo FROM USUARIO WHERE email = ?", (email,))
+    cursor.execute("SELECT email, codigo_criado_em, codigo FROM USUARIO WHERE ID_USUARIO = ?", (id_usuario,))
     user = cursor.fetchone()
     if user is None:
         return jsonify({'error': 'Email não cadastrado.'}), 404
 
-    user_id = user[0]
+    email = user[0]
     codigo_criado_em = user[1]
     codigo_valido = str(user[2])
 
@@ -218,7 +220,7 @@ def verificar_email():
             ativo = 1, 
             email_confirmado = 1 
         WHERE id_usuario = ?
-    ''', (user_id,))
+    ''', (id_usuario,))
 
     con.commit()
 
@@ -227,7 +229,7 @@ def verificar_email():
         SELECT id_usuario, email, nome_completo, tipo_usuario 
         FROM USUARIO 
         WHERE id_usuario = ?
-    """, (user_id,))
+    """, (id_usuario,))
 
     user_data = cursor.fetchone()
     cursor.close()
@@ -236,7 +238,7 @@ def verificar_email():
         return jsonify({'error': 'Erro ao buscar dados do usuário.'}), 500
 
     # Gerar token para login automático
-    token = generate_token(user_id, email)
+    token = generate_token(id_usuario, email)
 
     return jsonify({
         'success': 'Email verificado com sucesso! Sua conta foi ativada.',
@@ -254,19 +256,19 @@ def verificar_email():
 @app.route('/reenviar_codigo_verificacao', methods=['POST'])
 def reenviar_codigo_verificacao():
     data = request.get_json()
-    email = data.get('email')
+    id_usuario = data.get('id_usuario')
 
-    if not email:
-        return jsonify({'error': 'Email não informado.'}), 400
+    if not id_usuario:
+        return jsonify({'error': 'Usuário não encontrado.'}), 400
 
     cursor = con.cursor()
-    cursor.execute("SELECT id_usuario, email_confirmado FROM USUARIO WHERE email = ?", (email,))
+    cursor.execute("SELECT email, email_confirmado FROM USUARIO WHERE id_usuario = ?", (id_usuario,))
     user = cursor.fetchone()
 
     if user is None:
         return jsonify({'error': 'Email não cadastrado.'}), 404
 
-    user_id = user[0]
+    email = user[0]
     email_confirmado = user[1]
 
     if email_confirmado == 1:
@@ -276,19 +278,24 @@ def reenviar_codigo_verificacao():
     codigo = ''.join(random.choices('0123456789', k=6))
     codigo_criado_em = datetime.now()
 
-    # Enviar e-mail de verificação
-    enviar_email_verificacao(email, codigo)
-
     # Atualizar o código no banco de dados
     cursor.execute("""
         UPDATE USUARIO 
         SET codigo = ?, 
             codigo_criado_em = ? 
         WHERE id_usuario = ?
-    """, (codigo, codigo_criado_em, user_id))
+    """, (codigo, codigo_criado_em, id_usuario))
 
     con.commit()
     cursor.close()
+
+    # Função para envio de e-mail em segundo plano
+    def enviar_email_em_background(app, email, codigo):
+        with app.app_context():
+            enviar_email_verificacao(email, codigo)
+
+    # Dentro da rota
+    threading.Thread(target=enviar_email_em_background, args=(app, email, codigo)).start()
 
     return jsonify({
         'success': 'Novo código de verificação enviado para o seu email.'
