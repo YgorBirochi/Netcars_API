@@ -361,7 +361,7 @@ def obter_telefone():
     }), 200
 
 @app.route('/att_footer', methods=['PUT'])
-def att_telefone():
+def att_footer():
     token = request.headers.get('Authorization')
     if not token:
         return jsonify({'error': 'Token de autenticação necessário'}), 401
