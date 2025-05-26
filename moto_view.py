@@ -615,6 +615,18 @@ def add_moto():
             'error': 'Documento do veículo já cadastrada.'
         }), 409
 
+    if (ano_modelo < ano_fabricacao):
+        cursor.close()
+        return jsonify({
+            'error': 'Ano do modelo não pode ser anterior ao ano de fabricação.'
+        }), 400
+
+    if (preco_venda < preco_compra):
+        cursor.close()
+        return jsonify({
+            'error': 'Preço de venda não pode ser menor ao preço de compra.'
+        }), 400
+
     cursor.execute('''
         INSERT INTO MOTOS
         (marca, modelo, ano_modelo, ano_fabricacao, categoria, cor, renavam, marchas, partida, 

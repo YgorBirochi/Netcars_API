@@ -627,10 +627,10 @@ def add_carro():
             'error': 'Documento do veículo já cadastrado.'
         }), 409
 
-    if (ano_fabricacao < ano_modelo):
+    if (ano_modelo < ano_fabricacao):
         cursor.close()
         return jsonify({
-            'error': 'Ano de fabricação não pode ser anterior ao ano do modelo.'
+            'error': 'Ano do modelo não pode ser anterior ao ano de fabricação.'
         }), 400
 
     if (preco_venda < preco_compra):
