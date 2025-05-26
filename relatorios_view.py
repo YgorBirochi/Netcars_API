@@ -492,9 +492,6 @@ class CustomUsuarioPDF(FPDF):
 
         return "..."
 
-from fpdf import FPDF
-from datetime import datetime
-
 class CustomManutencaoPDF(FPDF):
     def __init__(self):
         super().__init__()
@@ -1108,6 +1105,18 @@ class CustomClientesComprasPDF(FPDF):
                 )
 
                 self.ln(5)
+
+    # Override para evitar NoneType no método interno de escape do FPDF
+    def _escape(self, s):
+        if s is None:
+            return ''
+        s = str(s)
+        return (
+            s.replace('\\', '\\\\')
+            .replace(')', '\\)')
+            .replace('(', '\\(')
+            .replace('\r', '\\r')
+        )
 
 
 # Fim das Classes

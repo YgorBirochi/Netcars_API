@@ -155,7 +155,7 @@ def get_manutencao_id_veic(id_veic, tipo_veic):
         manutencoes = cursor.fetchall()
 
         if not manutencoes or len(manutencoes) <= 0:
-            return jsonify({'error': 'Manutenção não encontrada.'}), 400
+            return jsonify({'manutencao': []}), 200
 
         data = []
 
