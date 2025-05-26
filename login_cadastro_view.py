@@ -185,12 +185,29 @@ def create_user():
 @app.route('/verificar_email', methods=['POST'])
 def verificar_email():
     data = request.get_json()
+    print(data)
 
-    id_usuario = data.get('id_usuario')
+    id_usuario = data.get('id_usuario', '')
+    email = data.get('email', '')
     codigo = str(data.get('codigo'))
 
-    if not id_usuario or not codigo:
+    if not codigo:
         return jsonify({'error': 'Dados incompletos.'}), 400
+
+    if not id_usuario:
+        if not email:
+            return jsonify({'error': 'Usuário não encontrado.'}), 400
+
+        cursor = con.cursor()
+
+        cursor.execute('SELECT ID_USUARIO FROM USUARIO WHERE EMAIL = ?', (email,))
+        user = cursor.fetchone()
+        cursor.close()
+
+        if not user:
+            return jsonify({'error': 'Usuáro não encontrado.'}), 400
+
+        id_usuario = user[0]
 
     cursor = con.cursor()
 
@@ -256,10 +273,24 @@ def verificar_email():
 @app.route('/reenviar_codigo_verificacao', methods=['POST'])
 def reenviar_codigo_verificacao():
     data = request.get_json()
-    id_usuario = data.get('id_usuario')
+
+    id_usuario = data.get('id_usuario', '')
+    email = data.get('email', '')
 
     if not id_usuario:
-        return jsonify({'error': 'Usuário não encontrado.'}), 400
+        if not email:
+            return jsonify({'error': 'Usuário não encontrado.'}), 400
+
+        cursor = con.cursor()
+
+        cursor.execute('SELECT ID_USUARIO FROM USUARIO WHERE EMAIL = ?', (email,))
+        user = cursor.fetchone()
+        cursor.close()
+
+        if not user:
+            return jsonify({'error': 'Usuáro não encontrado.'}), 400
+
+        id_usuario = user[0]
 
     cursor = con.cursor()
     cursor.execute("SELECT email, email_confirmado FROM USUARIO WHERE id_usuario = ?", (id_usuario,))
@@ -590,16 +621,19 @@ def login_user():
     tipo_usuario = user_data[8]
     email_confirmado = user_data[9]
 
-    if not ativo:
-        cursor.close()
-        return jsonify({'error': 'Usuário inativo'}), 401
-
-    if not email_confirmado:
-        cursor.close()
-        return jsonify({'error': 'Email não verificado. Por favor, verifique seu email e confirme sua conta.',
-                        'verificacao_pendente': True}), 401
-
     if check_password_hash(senha_hash, senha):
+
+        if not email_confirmado:
+            cursor.close()
+            return jsonify({
+                'error': 'Email não verificado. Por favor, verifique seu email e confirme sua conta.',
+                'verificacao_pendente': True
+            }), 401
+
+        if not ativo:
+            cursor.close()
+            return jsonify({'error': 'Usuário inativo'}), 401
+
         token = generate_token(id_usuario, email)
         tentativas = 0
         cursor.close()
