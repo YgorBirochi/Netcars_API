@@ -69,7 +69,6 @@ class CustomCarroPDF(FPDF):
         self.primary_color = (56, 56, 56)  # Cinza
         self.accent_color = (220, 50, 50)  # Vermelho para destaques
 
-
         # Dimensões
         self.card_height = 70   # Altura de cada card
         self.card_margin_x = 7.5 # Margem lateral
@@ -90,7 +89,6 @@ class CustomCarroPDF(FPDF):
         self.ln(4)
         self.set_line_width(0.5)
         self.set_draw_color(*self.primary_color)
-        # Linha horizontal
         self.line(10, 30, self.w - 10, 30)
         self.ln(10)
 
@@ -101,78 +99,48 @@ class CustomCarroPDF(FPDF):
         self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
 
     def create_car_cards(self, carros):
-        """
-        Renderiza os cards de 3 em 3 por página e exibe o total
-        no rodapé da última página.
-        """
         self.alias_nb_pages()
         total_carros = len(carros)
 
-        # 1) Se não houver carros, gera só uma página com mensagem + total
         if total_carros == 0:
-            self.add_page()      # dispara header()
-            self.ln(10)          # espaçamento após o header
-
+            self.add_page()
+            self.ln(10)
             self.set_font("Arial", "", 12)
-            self.cell(
-                0, 10,
-                "Nenhum carro encontrado para os critérios informados.",
-                ln=True, align="C"
-            )
-
+            self.cell(0, 10, "Nenhum carro encontrado para os critérios informados.", ln=True, align="C")
             self.ln(8)
             self.set_font("Arial", "B", 14)
-            self.cell(
-                0, 10,
-                f"Total de carros: {total_carros}",
-                ln=True, align="C"
-            )
+            self.cell(0, 10, f"Total de carros: {total_carros}", ln=True, align="C")
             return
 
-        # 2) Se houver carros, gera 3 cards por página
         for i, carro in enumerate(carros):
-            # a cada 3 carros, abre página nova e reinicia current_page_y
             if i % 3 == 0:
                 self.add_page()
-                # get_y() já está posicionado logo abaixo do header()
                 self.current_page_y = self.get_y()
 
-            # calcula Y do card atual
             start_y = self.current_page_y + (i % 3) * (self.card_height + self.card_spacing)
             self._draw_card(carro, start_y)
 
-            # se completou uma “fila” de 3, avança para a próxima linha
             if i % 3 == 2:
                 self.current_page_y += self.card_height + self.card_spacing
 
-        # 3) Na última página, exibe o total no rodapé (30 pts acima do final)
         self.set_y(-30)
         self.set_font("Arial", "B", 14)
-        self.cell(
-            0, 10,
-            f"Total de carros: {total_carros}",
-            ln=True, align="C"
-        )
+        self.cell(0, 10, f"Total de carros: {total_carros}", ln=True, align="C")
 
     def _draw_card(self, data, start_y):
-        """Desenha um card na posição vertical 'start_y'."""
-        # Fundo do card
         self.set_fill_color(240, 240, 240)
         self.rect(self.card_margin_x, start_y, self.card_width, self.card_height, "F")
 
-        # Cabeçalho do card: Marca + Modelo
         self.set_xy(self.card_margin_x + 5, start_y + 5)
         self.set_font("Arial", "B", 10)
         self.set_text_color(*self.primary_color)
         self.cell(0, 6, f"{data[0]} {data[1]}", ln=1)
 
-        # Colunas
         col1_x = self.card_margin_x + 5
-        col2_x = col1_x + 90  # ~90 px de distância da coluna 1
+        col2_x = col1_x + 90
         y_left = start_y + 14
         y_right = start_y + 14
 
-        # Coluna esquerda
         fields_left = [
             ("Placa", data[2]),
             ("Ano Modelo", data[3]),
@@ -189,13 +157,14 @@ class CustomCarroPDF(FPDF):
             self.cell(50, self.line_height, str(value), 0, 0)
             y_left += self.line_height + 1
 
-        # Coluna direita
+        # Coluna direita com status adicionado abaixo do preço de venda
         fields_right = [
             ("Ano Fabricação", data[4]),
             ("Combustível", data[8]),
             ("Quilometragem", format_kilometragem(data[10])),
             ("Cidade/Estado", f"{data[12]}/{data[11]}"),
-            ("Preço Venda", format_currency(data[14]))
+            ("Preço Venda", format_currency(data[14])),
+            ("Status", data[17])  # Adicionado status do veículo
         ]
         for label, value in fields_right:
             self.set_xy(col2_x, y_right)
@@ -205,7 +174,6 @@ class CustomCarroPDF(FPDF):
             self.cell(50, self.line_height, str(value), 0, 0)
             y_right += self.line_height + 1
 
-        # Versão no rodapé do card
         versao_y = start_y + self.card_height - 20
         self.set_xy(col1_x, versao_y)
         self.set_font("Arial", "", self.normal_font_size)
@@ -213,15 +181,14 @@ class CustomCarroPDF(FPDF):
         self.set_font("Arial", "B", self.bold_font_size)
         self.cell(0, self.line_height, str(data[16]), 0, 0)
 
+
 class CustomMotosPDF(FPDF):
     def __init__(self):
         super().__init__()
         self.set_title("Relatório de Motos")
         self.set_author("Sistema de Veículos")
-        self.primary_color = (56, 56, 56)  # Cinza
-        self.accent_color = (220, 50, 50)  # Vermelho para destaques
-
-        # Dimensões
+        self.primary_color = (56, 56, 56)
+        self.accent_color = (220, 50, 50)
         self.card_height = 70
         self.card_margin_x = 10
         self.card_width = 190
@@ -234,14 +201,11 @@ class CustomMotosPDF(FPDF):
         self.set_font("Arial", "B", 14)
         self.set_text_color(*self.primary_color)
         self.cell(0, 10, "Relatório de Motos", 0, 1, "C")
-
         self.set_font("Arial", "", 10)
         self.cell(0, 6, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, "C")
-
         self.ln(4)
         self.set_line_width(0.5)
         self.set_draw_color(*self.primary_color)
-        # Linha horizontal
         self.line(10, 30, self.w - 10, 30)
         self.ln(10)
 
@@ -252,77 +216,39 @@ class CustomMotosPDF(FPDF):
         self.cell(0, 10, f"Página {self.page_no()}/{{nb}}", 0, 0, "C")
 
     def create_moto_cards(self, motos):
-        """
-        Renderiza os cards de motos em uma grade de 3 por página
-        e exibe o total no rodapé da última página.
-        """
         self.alias_nb_pages()
         total_motos = len(motos)
-
-        # ——————————————————————————————————————————
-        # 1) Se não houver motos, gera só uma página com mensagem + total
         if total_motos == 0:
-            self.add_page()  # dispara header()
-            self.ln(10)  # espaçamento após o header
-
+            self.add_page()
+            self.ln(10)
             self.set_font("Arial", "", 12)
-            self.cell(
-                0, 10,
-                "Nenhuma moto encontrada para os critérios informados.",
-                ln=True, align="C"
-            )
-
+            self.cell(0, 10, "Nenhuma moto encontrada para os critérios informados.", ln=True, align="C")
             self.ln(8)
             self.set_font("Arial", "B", 14)
-            self.cell(
-                0, 10,
-                f"Total de motos: {total_motos}",
-                ln=True, align="C"
-            )
+            self.cell(0, 10, f"Total de motos: {total_motos}", ln=True, align="C")
             return
-
-        # ——————————————————————————————————————————
-        # 2) Se houver motos, gera 3 cards por página
         for i, moto in enumerate(motos):
-            # a cada 3 motos, abre página nova e reinicia current_page_y
             if i % 3 == 0:
                 self.add_page()
-                # get_y() já está posicionado logo abaixo do header()
                 self.current_page_y = self.get_y()
-
-            # posição vertical do card
-            card_y = self.current_page_y + (i % 3) * (self.card_height + self.card_spacing)
-            self._draw_card(moto, card_y)
-
-            # se terminer uma “fila” de 3, avança para próxima linha
+            start_y = self.current_page_y + (i % 3) * (self.card_height + self.card_spacing)
+            self._draw_card(moto, start_y)
             if i % 3 == 2:
                 self.current_page_y += self.card_height + self.card_spacing
-
-        # ——————————————————————————————————————————
-        # 3) Na última página, exibe o total no rodapé (30 pts acima do final)
         self.set_y(-30)
         self.set_font("Arial", "B", 14)
-        self.cell(
-            0, 10,
-            f"Total de motos: {total_motos}",
-            ln=True, align="C"
-        )
+        self.cell(0, 10, f"Total de motos: {total_motos}", ln=True, align="C")
 
     def _draw_card(self, data, start_y):
-        """Desenha um card na posição vertical 'start_y'."""
-        # Fundo do card
         self.set_fill_color(240, 240, 240)
         self.rect(self.card_margin_x, start_y, self.card_width, self.card_height, "F")
-
-        # Cabeçalho do card: Marca + Modelo
         self.set_xy(self.card_margin_x + 5, start_y + 5)
         self.set_font("Arial", "B", 10)
         self.set_text_color(*self.primary_color)
         self.cell(0, 6, f"{data[0]} {data[1]}", ln=1)
 
-        # Colunas
         col1_x = self.card_margin_x + 5
-        col2_x = col1_x + 90  # ~90 px de distância da coluna 1
+        col2_x = col1_x + 90
         y_left = start_y + 14
         y_right = start_y + 14
 
@@ -333,7 +259,7 @@ class CustomMotosPDF(FPDF):
             ("Categoria", data[5]),
             ("Cor", data[6]),
             ("Marchas", data[8]),
-            ("Licenciado", "Sim" if data[19] == 1 else "Não")
+            ("Licenciado", "Sim" if data[20] == 1 else "Não")
         ]
         for label, value in fields_left:
             self.set_xy(col1_x, y_left)
@@ -343,13 +269,14 @@ class CustomMotosPDF(FPDF):
             self.cell(50, self.line_height, str(value), 0, 0)
             y_left += self.line_height + 1
 
-        # Coluna direita
+        # Coluna direita + status
         fields_right = [
             ("Ano Fabricação", data[4]),
             ("Cilindradas", data[11]),
             ("Quilometragem", format_kilometragem(data[17])),
             ("Preço Compra", format_currency(data[18])),
-            ("Preço Venda", format_currency(data[19]))
+            ("Preço Venda", format_currency(data[19])),
+            ("Status", data[21])
         ]
         for label, value in fields_right:
             self.set_xy(col2_x, y_right)
@@ -358,6 +285,15 @@ class CustomMotosPDF(FPDF):
             self.set_font("Arial", "B", self.bold_font_size)
             self.cell(50, self.line_height, str(value), 0, 0)
             y_right += self.line_height + 1
+
+        # Versão
+        versao_y = start_y + self.card_height - 20
+        self.set_xy(col1_x, versao_y)
+        self.set_font("Arial", "", self.normal_font_size)
+        self.cell(30, self.line_height, "Versão:", 0, 0)
+        self.set_font("Arial", "B", self.bold_font_size)
+        self.cell(0, self.line_height, str(data[22]), 0, 0)
+
 
 
 class CustomUsuarioPDF(FPDF):
@@ -525,7 +461,6 @@ class CustomManutencaoPDF(FPDF):
     def create_manutencao_report(self, manutencoes):
         self.alias_nb_pages()
 
-        # Se não há manutenções, ou todas chegaram sem serviços, exibe mensagem única
         no_manut = (
             not manutencoes
             or all(len(m['servicos']) == 0 for m in manutencoes)
@@ -542,7 +477,6 @@ class CustomManutencaoPDF(FPDF):
             )
             return
 
-        # Caso haja ao menos uma manutenção com serviços, gera um relatório por manutenção
         for m in manutencoes:
             self.add_page()
             self._draw_header_box(m)
@@ -550,7 +484,6 @@ class CustomManutencaoPDF(FPDF):
             self._draw_services_table(m['servicos'])
 
     def _draw_header_box(self, m):
-        # Desenha retângulo geral de header
         self.set_draw_color(*self.primary_color)
         x0, y0 = self.get_x(), self.get_y()
         total_w = self.w - 20
@@ -592,38 +525,43 @@ class CustomManutencaoPDF(FPDF):
         self.multi_cell(total_w - 4, self.line_h, m.get('observacao') or '-')
 
     def _draw_services_table(self, servicos):
-        # Cabeçalho da tabela
-        self.set_font("Arial", "B", self.font_bold)
-        self.set_fill_color(230, 215, 245)
         tbl_w = self.w - 20
         w_desc = tbl_w * 0.6
         w_unit = tbl_w * 0.13
         w_qtd = tbl_w * 0.13
         w_total = tbl_w * 0.14
 
+        # Cabeçalho da tabela
+        self.set_font("Arial", "B", self.font_bold)
+        self.set_fill_color(230, 215, 245)
         self.set_text_color(40, 40, 40)
         self.cell(w_desc, self.line_h, "Descrição", border=1, fill=True)
-        self.cell(w_unit, self.line_h, "Vr Unit.", border=1, fill=True)
-        self.cell(w_qtd, self.line_h, "Qtd.", border=1, fill=True)
-        self.cell(w_total, self.line_h, "Total", border=1, fill=True, ln=1)
+        self.cell(w_unit, self.line_h, "Vr Unit.", border=1, fill=True, align='R')
+        self.cell(w_qtd, self.line_h, "Qtd.", border=1, fill=True, align='R')
+        self.cell(w_total, self.line_h, "Total", border=1, fill=True, align='R', ln=1)
 
-        # Linhas de serviços
+        # Linhas de serviços com números alinhados à direita
         self.set_font("Arial", "", self.font_norm)
         self.set_text_color(*self.primary_color)
         for srv in servicos:
+            # descrição à esquerda
             self.cell(w_desc, self.line_h, srv.get('descricao', '-'), border=1)
+            # valores numéricos à direita
             unit = f"R$ {srv.get('valor_unitario', 0):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-            self.cell(w_unit, self.line_h, unit, border=1)
-            self.cell(w_qtd, self.line_h, str(srv.get('quantidade', 0)), border=1)
+            self.cell(w_unit, self.line_h, unit, border=1, align='R')
+            self.cell(w_qtd, self.line_h, str(srv.get('quantidade', 0)), border=1, align='R')
             tot = f"R$ {srv.get('total_item', 0):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-            self.cell(w_total, self.line_h, tot, border=1, ln=1)
+            self.cell(w_total, self.line_h, tot, border=1, align='R', ln=1)
 
-        # Total geral
+        # Total geral alinhado à direita
         self.set_font("Arial", "B", self.font_bold)
-        self.cell(w_desc + w_unit + w_qtd, self.line_h, "Total Geral", border=1)
+        self.cell(w_desc, self.line_h, "Total Geral", border=1)
+        # células vazias para colunas unit e qtd
+        self.cell(w_unit, self.line_h, "", border=1)
+        self.cell(w_qtd, self.line_h, "", border=1)
         total_val = sum(s.get('total_item', 0) for s in servicos)
         total_fmt = f"R$ {total_val:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-        self.cell(w_total, self.line_h, total_fmt, border=1, ln=1)
+        self.cell(w_total, self.line_h, total_fmt, border=1, align='R', ln=1)
 
     # Override para evitar NoneType no método interno de escape do FPDF
     def _escape(self, s):
@@ -851,7 +789,7 @@ class CustomParcelamentoPDF(FPDF):
 
         # 3ª linha
         self.cell(col_w, self.line_h, f"Telefone: {format_phone(cli['telefone'])}", ln=0)
-        self.cell(col_w, self.line_h, f"Ano: {v['ano_modelo']}/{v['ano_fabricacao']}", ln=0)
+        self.cell(col_w, self.line_h, f"Ano: {v['ano_fabricacao']}/{v['ano_modelo']}", ln=0)
         self.cell(col_w, self.line_h, f"Parcelas: {qtd}", ln=1)
 
         self.ln(8)
@@ -1130,10 +1068,44 @@ def criar_pdf_carro():
     ano_fabricacao = request.args.get('ano_fabricacao')
     ano_modelo = request.args.get('ano_modelo')
 
-    query = """SELECT marca, modelo, placa, ano_modelo, ano_fabricacao, cor, renavam, cambio, combustivel, 
-                      categoria, quilometragem, estado, cidade, preco_compra, preco_venda, licenciado, versao 
-               FROM carros WHERE 1=1"""
+    query = """SELECT
+                    marca,
+                    modelo,
+                    placa,
+                    ano_modelo,
+                    ano_fabricacao,
+                    cor,
+                    renavam,
+                    cambio,
+                    combustivel,
+                    categoria,
+                    quilometragem,
+                    estado,
+                    cidade,
+                    preco_compra,
+                    preco_venda,
+                    licenciado,
+                    versao,
+                              CASE
+                        WHEN vc.TIPO_VENDA_COMPRA = 1
+                        AND vc.STATUS = 1 
+                        THEN 'Vendido'
+                        WHEN vc.TIPO_VENDA_COMPRA = 1
+                        AND vc.STATUS = 2 
+                        THEN 'Vendido'
+                        ELSE 'Disponível'
+                    END AS status_carro
+                FROM
+                    carros c
+                LEFT JOIN VENDA_COMPRA vc
+                  ON
+                    c.ID_CARRO = vc.ID_VEICULO
+                    AND vc.TIPO_VENDA_COMPRA = 1
+                    AND vc.STATUS IN (1, 2)
+                WHERE 1 = 1"""
+
     params = []
+
     if marca:
         query += " AND UPPER(marca) = UPPER(?)"
         params.append(marca)
@@ -1171,10 +1143,40 @@ def criar_pdf_moto():
     ano_modelo = request.args.get('ano_modelo')
 
     # Removida a coluna "versao" da consulta, já que parece não existir na tabela motos
-    query = """SELECT marca, modelo, placa, ano_modelo, ano_fabricacao, categoria, cor, renavam, 
-                      marchas, partida, tipo_motor, cilindrada, freio_dianteiro_traseiro, refrigeracao, 
-                      alimentacao, estado, cidade, quilometragem, preco_compra, preco_venda, licenciado 
-               FROM motos WHERE 1=1"""
+    query = """SELECT
+                    m.marca,
+                    m.modelo,
+                    m.placa,
+                    m.ano_modelo,
+                    m.ano_fabricacao,
+                    m.categoria,
+                    m.cor,
+                    m.renavam,
+                    m.marchas,
+                    m.partida,
+                    m.tipo_motor,
+                    m.cilindrada,
+                    m.freio_dianteiro_traseiro,
+                    m.refrigeracao,
+                    m.alimentacao,
+                    m.estado,
+                    m.cidade,
+                    m.quilometragem,
+                    m.preco_compra,
+                    m.preco_venda,
+                    m.licenciado,
+                    CASE
+                        WHEN vc.TIPO_VENDA_COMPRA = 1
+                             AND vc.STATUS IN (1, 2)
+                        THEN 'Vendido'
+                        ELSE 'Disponível'
+                    END AS status_carro
+                FROM motos m
+                LEFT JOIN VENDA_COMPRA vc
+                  ON m.id_moto = vc.ID_VEICULO
+                 AND vc.TIPO_VENDA_COMPRA = 1
+                 AND vc.STATUS IN (1, 2)
+                WHERE 1=1"""
     params = []
 
     if marca:
