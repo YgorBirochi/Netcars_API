@@ -584,7 +584,23 @@ def pagar_parcela(id_parcela, amortizada):
                 UPDATE VENDA_COMPRA
                 SET STATUS = 2
                 WHERE ID_FINANCIAMENTO = ?
+                RETURNING VALOR_TOTAL, TIPO_VEICULO, ID_VEICULO
             ''', (id_financiamento,))
+
+            valor_total, tipo_veiculo, id_veiculo = cursor.fetchone()
+
+            if tipo_veiculo == 1:
+                cursor.execute('''
+                    UPDATE CARROS
+                    SET PRECO_VENDA = ?
+                    WHERE ID_CARRO = ?
+                ''', (valor_total, id_veiculo))
+            else:
+                cursor.execute('''
+                    UPDATE MOTOS
+                    SET PRECO_VENDA = ?
+                    WHERE ID_MOTO = ?
+                ''', (valor_total, id_veiculo))
 
         con.commit()
 

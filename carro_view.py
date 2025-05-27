@@ -224,23 +224,23 @@ def get_carro():
 
         if tipo_user == 3:
             cursor.execute(
-                'SELECT 1 FROM CARROS WHERE RESERVADO IS TRUE AND ID_USUARIO_RESERVA = ? AND ID_CARRO = ?',
+                'SELECT ID_USUARIO_RESERVA FROM CARROS WHERE RESERVADO IS TRUE AND ID_USUARIO_RESERVA = ? AND ID_CARRO = ?',
                 (id_usuario, idFiltro))
         else:
-            cursor.execute('SELECT 1 FROM CARROS WHERE RESERVADO IS TRUE AND ID_CARRO = ?', (idFiltro,))
+            cursor.execute('SELECT ID_USUARIO_RESERVA FROM CARROS WHERE RESERVADO IS TRUE AND ID_CARRO = ?', (idFiltro,))
 
         usuario_reservou = cursor.fetchone()
 
         if tipo_user == 3:
             cursor.execute(
                 '''
-                SELECT 1
+                SELECT venda_compra.status
                 FROM carros
                 INNER JOIN venda_compra
                 ON carros.id_carro = venda_compra.id_veiculo
                 AND venda_compra.tipo_veiculo = 1
                 WHERE venda_compra.id_usuario = ? AND carros.ativo = 0
-                AND carros.id_carro = ?
+                AND carros.id_carro = ? AND venda_compra.tipo_venda_compra = 1
                 ''', (id_usuario, idFiltro)
             )
         else:
@@ -252,10 +252,15 @@ def get_carro():
                 ON carros.id_carro = venda_compra.id_veiculo
                 AND venda_compra.tipo_veiculo = 1
                 WHERE carros.ativo = 0 AND carros.id_carro = ?
+                AND venda_compra.tipo_venda_compra = 1 
                 ''', (idFiltro,)
             )
 
         carro_vendido = cursor.fetchone()
+
+        status_venda = 0
+        if carro_vendido:
+            status_venda = carro_vendido[0]
 
         if usuario_reservou or carro_vendido:
             cursor.execute(f'{query} WHERE ID_CARRO = ?', (idFiltro,))
@@ -296,18 +301,31 @@ def get_carro():
                 'imagens': imagens
             }
 
-            cursor.close()
-
             if usuario_reservou:
+
+                cursor.execute('SELECT NOME_COMPLETO FROM USUARIO WHERE ID_USUARIO = ?', (usuario_reservou[0],))
+                nome_usuario = cursor.fetchone()[0]
+
+                cursor.close()
+
                 return jsonify({
                     "reserva": True,
-                    "veiculos": [dados_carro]
+                    "veiculos": [dados_carro],
+                    "nome_usuario": nome_usuario
                 }), 200
+
             elif carro_vendido:
-                return jsonify({
-                    "vendido": True,
-                    "veiculos": [dados_carro]
-                }), 200
+                if status_venda == 2:
+                    return jsonify({
+                        "vendido": True,
+                        "veiculos": [dados_carro]
+                    }), 200
+                elif status_venda == 1:
+                    return jsonify({
+                        "vendido": True,
+                        "parcelamento": True,
+                        "veiculos": [dados_carro]
+                    }), 200
 
     anoMaxFiltro = data.get('ano-max')
     anoMinFiltro = data.get('ano-min')

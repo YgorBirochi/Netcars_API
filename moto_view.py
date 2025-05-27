@@ -230,79 +230,98 @@ def get_moto():
         if tipo_user == 3:
             cursor.execute(
                 '''
-                SELECT 1
+                SELECT venda_compra.STATUS
                 FROM carros
                 INNER JOIN venda_compra
                 ON carros.id_carro = venda_compra.id_veiculo
                 AND venda_compra.tipo_veiculo = 1
                 WHERE venda_compra.id_usuario = ? AND carros.ativo = 0
-                AND carros.id_carro = ?
+                AND carros.id_carro = ? ND venda_compra.tipo_venda_compra = 1
                 ''', (id_usuario, idFiltro)
             )
+
         else:
             cursor.execute(
                 '''
                 SELECT 1
-                FROM carros
+                FROM motos
                 INNER JOIN venda_compra
-                ON carros.id_carro = venda_compra.id_veiculo
-                AND venda_compra.tipo_veiculo = 1
-                WHERE carros.ativo = 0 AND carros.id_carro = ?
+                ON motos.id_moto = venda_compra.id_veiculo
+                AND venda_compra.tipo_veiculo = 2
+                WHERE motos.ativo = 0 AND carros.id_moto = ?
+                AND venda_compra.tipo_venda_compra = 1 
                 ''', (idFiltro,)
             )
 
         carro_vendido = cursor.fetchone()
 
+        status_venda = 0
+        if carro_vendido:
+            status_venda = carro_vendido[0]
+
         if usuario_reservou or carro_vendido:
-                cursor.execute(f'{query} WHERE ID_MOTO = ?', (idFiltro,))
+            cursor.execute(f'{query} WHERE ID_MOTO = ?', (idFiltro,))
 
-                moto = cursor.fetchone()
+            moto = cursor.fetchone()
 
-                images_dir = os.path.join(app.root_path, upload_folder, 'Motos', str(idFiltro))
-                imagens = []
-                if os.path.exists(images_dir):
-                    for file in os.listdir(images_dir):
-                        if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                            imagem_url = url_for('get_moto_image', id_moto=idFiltro, filename=file, _external=True)
-                            imagens.append(imagem_url)
+            images_dir = os.path.join(app.root_path, upload_folder, 'Motos', str(idFiltro))
+            imagens = []
+            if os.path.exists(images_dir):
+                for file in os.listdir(images_dir):
+                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                        imagem_url = url_for('get_moto_image', id_moto=idFiltro, filename=file, _external=True)
+                        imagens.append(imagem_url)
 
-                dados_moto = {
-                    'id': moto[0],
-                    'marca': moto[1],
-                    'modelo': moto[2],
-                    'ano_modelo': moto[3],
-                    'ano_fabricacao': moto[4],
-                    'categoria': moto[5],
-                    'cor': moto[6],
-                    'renavam': moto[7],
-                    'marchas': moto[8],
-                    'partida': moto[9],
-                    'tipo_motor': moto[10],
-                    'cilindrada': moto[11],
-                    'freio_dianteiro_traseiro': moto[12],
-                    'refrigeracao': moto[13],
-                    'estado': moto[14],
-                    'cidade': moto[15],
-                    'quilometragem': moto[16],
-                    'preco_compra': moto[17],
-                    'preco_venda': moto[18],
-                    'placa': moto[19],
-                    'alimentacao': moto[20],
-                    'criado_em': moto[21],
-                    'ativo': moto[22],
-                    'imagens': imagens
-                }
+            dados_moto = {
+                'id': moto[0],
+                'marca': moto[1],
+                'modelo': moto[2],
+                'ano_modelo': moto[3],
+                'ano_fabricacao': moto[4],
+                'categoria': moto[5],
+                'cor': moto[6],
+                'renavam': moto[7],
+                'marchas': moto[8],
+                'partida': moto[9],
+                'tipo_motor': moto[10],
+                'cilindrada': moto[11],
+                'freio_dianteiro_traseiro': moto[12],
+                'refrigeracao': moto[13],
+                'estado': moto[14],
+                'cidade': moto[15],
+                'quilometragem': moto[16],
+                'preco_compra': moto[17],
+                'preco_venda': moto[18],
+                'placa': moto[19],
+                'alimentacao': moto[20],
+                'criado_em': moto[21],
+                'ativo': moto[22],
+                'imagens': imagens
+            }
+
+            if usuario_reservou:
+
+                cursor.execute('SELECT NOME_COMPLETO FROM USUARIO WHERE ID_USUARIO = ?', (usuario_reservou[0],))
+                nome_usuario = cursor.fetchone()[0]
 
                 cursor.close()
 
-                if usuario_reservou:
-                    return jsonify({
-                        "reserva": True,
-                        "veiculos": [dados_moto]
-                    }), 200
-                elif carro_vendido:
+                return jsonify({
+                    "reserva": True,
+                    "veiculos": [dados_moto],
+                    "nome_usuario": nome_usuario
+                }), 200
+
+            elif carro_vendido:
+                if status_venda == 2:
                     return jsonify({
                         "vendido": True,
+                        "veiculos": [dados_moto]
+                    }), 200
+                elif status_venda == 1:
+                    return jsonify({
+                        "vendido": True,
+                        "parcelamento": True,
                         "veiculos": [dados_moto]
                     }), 200
 
