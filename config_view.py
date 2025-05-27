@@ -128,6 +128,67 @@ def att_config_garagem():
     return jsonify({'success': 'Dados atualizados com sucesso!'}), 200
 
 
+@app.route('/config-garagem', methods=['POST'])
+def adicionar_config_garagem():
+    token = request.headers.get('Authorization')
+    if not token:
+        return jsonify({'error': 'Token de autenticação necessário'}), 401
+
+    token = remover_bearer(token)
+    try:
+        payload = jwt.decode(token, senha_secreta, algorithms=['HS256'])
+        id_usuario = payload['id_usuario']
+    except jwt.ExpiredSignatureError:
+        return jsonify({'error': 'Token expirado'}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    cursor = con.cursor()
+
+    # Verifica se é um ADM que está tentando fazer a alteração
+    cursor.execute('SELECT TIPO_USUARIO FROM USUARIO WHERE ID_USUARIO = ?', (id_usuario,))
+    user_type = cursor.fetchone()[0]
+    if user_type != 1:
+        return jsonify({'error': 'Acesso restrito a administradores'}), 403
+
+    try:
+        data = request.get_json() or {}
+
+        chave_pix = data.get('chave_pix', '')
+        cidade = data.get('cidade', '')
+        cnpj = data.get('cnpj', '')
+        primeiro_nome = data.get('primeiro_nome', '')
+        segundo_nome = data.get('segundo_nome', '')
+        estado = data.get('estado', '')
+        cor_princ = data.get('cor_princ', '')
+        cor_fund_1 = data.get('cor_fund_1', '')
+        cor_fund_2 = data.get('cor_fund_2', '')
+        cor_texto = data.get('cor_texto', '')
+        razao_social = data.get('razao_social', '')
+
+        # Validações
+        if not chave_pix or not cidade or not cnpj or not primeiro_nome:
+            return jsonify({'error': 'Campos obrigatórios não preenchidos'}), 400
+
+        cursor.execute("""
+            INSERT INTO CONFIG_GARAGEM 
+            (CHAVE_PIX, CIDADE, CNPJ, PRIMEIRO_NOME, SEGUNDO_NOME, 
+             ESTADO, COR_PRINC, COR_FUND_1, COR_FUND_2, COR_TEXTO, RAZAO_SOCIAL) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (chave_pix, cidade, cnpj, primeiro_nome, segundo_nome,
+              estado, cor_princ, cor_fund_1, cor_fund_2, cor_texto, razao_social))
+
+        con.commit()
+        cursor.close()
+
+        return jsonify({
+            'success': 'Configuração criada com sucesso'
+        }), 201
+
+    except Exception as e:
+        cursor.close()
+        return jsonify({'error': str(e)}), 500
+
 ### LOGO
 @app.route('/uploads/logo')
 def get_logo_img():
